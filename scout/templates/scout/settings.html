@@ -1,0 +1,97 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<header class="page-head"><div><h1>Settings</h1><p class="sub">Control what NexScout looks for, how strict it is, and how much Claude it uses.</p></div></header>
+
+<div class="settings-grid">
+  <nav class="settings-nav" aria-label="Settings sections">
+    <a href="#search">Search</a><a href="#filters">Filters</a><a href="#claude">Claude</a><a href="#profile">Profile</a><a href="#sources">Source health</a>
+  </nav>
+
+  <div>
+    <form method="post" class="panel">{% csrf_token %}
+      <input type="hidden" name="part" value="settings">
+      {% if form.non_field_errors %}<div class="panel-body"><div class="callout warn">{{ form.non_field_errors }}</div></div>{% endif %}
+
+      <div class="set-sec" id="search">
+        <div><h2>Search</h2><p class="desc-s">Keywords to look for and which job boards to collect from.</p></div>
+        <div>
+          {% include "scout/_field.html" with f=form.keywords %}
+          <div class="field"><span class="label">Sources</span>
+            <div class="toggles">
+              {% for f in form %}{% if f.name|slice:":7" == "source_" %}<label class="toggle">{{ f }}{{ f.label }}</label>{% endif %}{% endfor %}
+            </div></div>
+        </div>
+      </div>
+
+      <div class="set-sec" id="filters">
+        <div><h2>Filters</h2><p class="desc-s">Rule-based checks that run before Claude, so they cost nothing.</p></div>
+        <div>
+          {% include "scout/_field.html" with f=form.allowed_locations %}
+          {% include "scout/_field.html" with f=form.excluded_titles %}
+          <div class="field"><label class="toggle">{{ form.block_senior_titles }}Skip Senior, Staff, Lead and Principal titles</label></div>
+          <div class="form-grid">
+            {% include "scout/_field.html" with f=form.max_years_required %}
+            {% include "scout/_field.html" with f=form.max_age_days %}
+          </div>
+        </div>
+      </div>
+
+      <div class="set-sec" id="claude">
+        <div><h2>Claude</h2><p class="desc-s">Runs through the Claude Code CLI on your Pro login. Lower caps use less of your plan.</p></div>
+        <div class="form-grid">
+          <div class="field"><label for="{{ form.llm_model.id_for_label }}">Model</label>{{ form.llm_model }}
+            <span class="help">Leave blank to use <code>{{ env_model }}</code> from .env</span>{% for e in form.llm_model.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>
+          {% include "scout/_field.html" with f=form.min_score %}
+          {% include "scout/_field.html" with f=form.score_threshold %}
+          {% include "scout/_field.html" with f=form.daily_score_cap %}
+          {% include "scout/_field.html" with f=form.daily_draft_cap %}
+          {% include "scout/_field.html" with f=form.daily_outreach_cap %}
+          {% include "scout/_field.html" with f=form.score_batch_size %}
+          {% include "scout/_field.html" with f=form.draft_batch_size %}
+          {% include "scout/_field.html" with f=form.followup_days %}
+        </div>
+      </div>
+
+      <div class="save-bar"><span class="muted small">Changing filters re-checks jobs that haven't been scored yet.</span><button class="btn primary">Save settings</button></div>
+    </form>
+
+    <section class="panel" id="profile">
+      <div class="set-sec">
+        <div><h2>Your profile</h2><p class="desc-s">The only facts Claude may use when scoring and drafting. Built from your CV; edit it as your work grows.</p>
+          {% if cv_preview_differs %}<p class="desc-s"><span class="tag">Edited</span></p>{% endif %}</div>
+        <div>
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="part" value="profile">
+            {{ pform.prompt_profile }}
+            <div class="row-actions">
+              <button class="btn primary">Save profile</button>
+            </div>
+          </form>
+          <form method="post" data-confirm="Replace your profile with the version built from your CV? Your edits will be lost." class="inline" style="margin-top:8px">{% csrf_token %}
+            <input type="hidden" name="part" value="rebuild"><button class="btn sm ghost">{% icon "refresh" %}Rebuild from CV</button></form>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="sources">
+      <div class="panel-head"><h2>Source health</h2>
+        <form method="post" action="{% url 'scout:run' %}" class="inline" data-busy="Fetching from every source…">{% csrf_token %}
+          <input type="hidden" name="action" value="fetch"><input type="hidden" name="force" value="1">
+          <input type="hidden" name="next" value="{% url 'scout:settings' %}#sources"><button class="btn sm">{% icon "refresh" %}Fetch all now</button></form></div>
+      <div style="overflow-x:auto">
+      <table class="plain">
+        <thead><tr><th>Source</th><th>Fetch at most every</th><th>Last fetch</th><th>Result</th></tr></thead>
+        <tbody>{% for s in sources %}<tr>
+          <td><a class="link" href="{{ s.homepage }}" target="_blank" rel="noopener noreferrer">{{ s.label }}</a></td>
+          <td>{{ s.interval }}</td>
+          <td>{% if s.state.last_fetched_at %}{{ s.state.last_fetched_at|date:"j M, H:i" }}{% else %}—{% endif %}</td>
+          <td>{% if s.state %}<span class="dot {% if s.state.last_ok %}ok{% else %}bad{% endif %}"></span>&nbsp; {{ s.state.last_message|default:"—"|truncatechars:90 }}{% else %}Never fetched{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      </table>
+      </div>
+      <div class="panel-body"><p class="muted small" style="margin:0">Official public feeds only. Requests identify NexScout with your contact email, and every listing links back to its source.</p></div>
+    </section>
+  </div>
+</div>
+{% endblock %}

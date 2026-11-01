@@ -1,0 +1,52 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Outreach{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Direct outreach</h1><p class="sub">Companies you chose to contact. Claude drafts each message; you send it yourself. {{ drafted_today }}/{{ cap }} drafts used today.</p></div>
+  <div class="actions">
+    <form method="post" action="{% url 'scout:outreach_bulk' %}" data-busy="Claude is drafting messages…">{% csrf_token %}
+      <input type="hidden" name="action" value="draft_all">
+      <button class="btn primary" {% if not to_draft %}disabled{% endif %}>{% icon "pen" %}Draft {{ to_draft }} message{{ to_draft|pluralize }}</button></form>
+  </div>
+</header>
+
+<details class="panel" {% if open_form %}open{% endif %}>
+  <summary><h2>Add a company</h2></summary>
+  <div class="panel-body">
+    <form method="post" class="form-grid">{% csrf_token %}
+      {% for f in form %}
+        <div class="field {% if f.name == 'what_they_do' or f.name == 'notes' or f.name == 'angle' %}wide{% endif %}">
+          <label for="{{ f.id_for_label }}">{{ f.label }}{% if f.field.required %} <span class="muted">*</span>{% endif %}</label>{{ f }}
+          {% if f.help_text %}<span class="help">{{ f.help_text }}</span>{% endif %}{% for e in f.errors %}<span class="err">{{ e }}</span>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="field wide"><div><button class="btn primary">Add company</button></div></div>
+    </form>
+  </div>
+</details>
+
+<nav class="seg small" aria-label="Filter by status">
+  <a href="?" class="{% if not status %}on{% endif %}">All</a>
+  {% for v, l in statuses %}<a href="?status={{ v }}" class="{% if v == status %}on{% endif %}">{{ l }}</a>{% endfor %}
+</nav>
+
+<section class="panel">
+{% if targets %}
+  <div class="list">
+    {% for t in targets %}
+    <div class="target">
+      <a href="{% url 'scout:outreach_detail' t.pk %}" class="target-main">
+        <span class="avatar">{{ t.company_name|initials }}</span>
+        <span><b>{{ t.company_name }}</b><span>{% if t.contact_name %}{{ t.contact_name }}{% if t.contact_role %}, {{ t.contact_role }}{% endif %} · {% endif %}{{ t.get_channel_display }}</span></span>
+      </a>
+      <span class="target-msg">{% if t.message %}{{ t.message|truncatechars:120 }}{% else %}<span class="muted">No message yet</span>{% endif %}</span>
+      <span class="badge o-{{ t.status }}">{{ t.get_status_display }}</span>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty"><div class="empty-ico">{% icon "inbox" %}</div><p class="t">No companies yet</p><p>Add startups you'd like to work with. Claude drafts a short, personal note for each.</p></div>
+{% endif %}
+</section>
+<p class="muted small">NexScout never opens the LinkedIn links you paste and never sends messages.</p>
+{% endblock %}

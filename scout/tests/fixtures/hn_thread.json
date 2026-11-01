@@ -1,0 +1,8 @@
+{"id": 45000000, "title": "Ask HN: Who is hiring? (November 2026)", "children": [
+ {"id": 45000001, "author": "acme_hr", "created_at": "2026-11-01T15:00:00.000Z",
+  "text": "Acme Payments | Backend Engineer (Python/Django) | REMOTE (Worldwide) | Full-time | https://acme.example/jobs<p>We build payout infrastructure for African merchants. Stack: Django, Postgres, Celery. Apply via the link.</p>", "children": []},
+ {"id": 45000002, "author": "bigco", "created_at": "2026-11-01T15:05:00.000Z",
+  "text": "BigCo | Senior Frontend Engineer | San Francisco, CA | ONSITE<p>React and TypeScript. Must be authorized to work in the US.</p>", "children": []},
+ {"id": 45000003, "author": "noise", "created_at": "2026-11-01T15:06:00.000Z", "text": "Is anyone hiring juniors?", "children": []},
+ {"id": 45000004, "author": null, "created_at": "2026-11-01T15:07:00.000Z", "text": null, "children": []}
+]}

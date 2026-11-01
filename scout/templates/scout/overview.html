@@ -1,0 +1,105 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+{% now "G" as hour %}
+<header class="page-head">
+  <div>
+    <p class="eyebrow">{% now "l, j F Y" %}</p>
+    <h1>Good {% if hour|add:0 < 12 %}morning{% elif hour|add:0 < 17 %}afternoon{% else %}evening{% endif %}, Timothy</h1>
+    <p class="sub">{% if usage.awaiting_draft %}{{ usage.awaiting_draft }} strong match{{ usage.awaiting_draft|pluralize:"es" }} waiting for a draft.{% elif stats.followups_due %}{{ stats.followups_due }} follow-up{{ stats.followups_due|pluralize }} due today.{% else %}Here's where your job search stands.{% endif %}</p>
+  </div>
+  <div class="actions">
+    <form method="post" action="{% url 'scout:run' %}" data-busy="Fetching new jobs from the boards…">{% csrf_token %}
+      <input type="hidden" name="action" value="fetch"><button class="btn">{% icon "download" %}Fetch jobs</button></form>
+    <form method="post" action="{% url 'scout:run' %}" data-busy="Claude is scoring 5 jobs…">{% csrf_token %}
+      <input type="hidden" name="action" value="score"><input type="hidden" name="limit" value="5">
+      <button class="btn" {% if not usage.awaiting_score %}disabled{% endif %}>{% icon "spark" %}Score 5</button></form>
+    <form method="post" action="{% url 'scout:run' %}" data-busy="Claude is drafting 3 notes…">{% csrf_token %}
+      <input type="hidden" name="action" value="draft"><input type="hidden" name="limit" value="3">
+      <button class="btn primary" {% if not usage.awaiting_draft %}disabled{% endif %}>{% icon "pen" %}Draft 3 notes</button></form>
+  </div>
+</header>
+
+<section class="kpis" aria-label="Key numbers">
+  <a class="kpi" href="{% url 'scout:jobs' %}?sort=found"><span class="l">New jobs today</span><span class="n">{{ stats.new_today }}</span><span class="h">passed your filters</span></a>
+  <a class="kpi" href="{% url 'scout:jobs' %}?status=shortlisted"><span class="l">Shortlisted</span><span class="n">{{ stats.shortlisted }}</span><span class="h">ready to apply</span></a>
+  <a class="kpi" href="{% url 'scout:jobs' %}?status=applied"><span class="l">Applied this week</span><span class="n">{{ stats.applied_week }}</span><span class="h">since Monday</span></a>
+  <a class="kpi" href="{% url 'scout:jobs' %}?status=interviewing"><span class="l">Interviewing</span><span class="n">{{ stats.interviews }}</span><span class="h">active processes</span></a>
+  <a class="kpi {% if stats.followups_due %}alert{% endif %}" href="{% url 'scout:jobs' %}?due=1&view=all"><span class="l">Follow-ups due</span><span class="n">{{ stats.followups_due }}</span><span class="h">{% if stats.followups_due %}chase today{% else %}all caught up{% endif %}</span></a>
+  <div class="kpi"><span class="l">Response rate</span><span class="n">{% if stats.response_rate is None %}—{% else %}{{ stats.response_rate }}<small>%</small>{% endif %}</span>
+    <span class="h">{% if stats.applied_total %}{{ stats.responded }} of {{ stats.applied_total }} replied{% else %}no applications yet{% endif %}</span></div>
+</section>
+
+<div class="layout-2">
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Top matches</h2><a class="link small" href="{% url 'scout:jobs' %}?min={{ threshold }}">View all {{ threshold }}+</a></div>
+      {% if top %}
+        <div class="list">
+          {% for j in top %}
+          <a class="li" href="{% url 'scout:jobs' %}?job={{ j.pk }}">
+            <span class="ring sm {{ j.score|score_band:threshold }}" style="--v: {{ j.score }}"><b>{{ j.score }}</b></span>
+            <span class="li-main"><b>{{ j.title }}</b><span>{{ j.company }} · {{ j.location|default:"Remote" }}{% if j.salary %} · {{ j.salary }}{% endif %}</span></span>
+            <span class="li-side">{% if j.has_scam_risk %}<span class="tag warn">Review</span>{% endif %}{% if j.drafted_at %}<span class="tag accent">Draft ready</span>{% endif %}<span class="badge s-{{ j.status }}">{{ j.get_status_display }}</span></span>
+          </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty"><div class="empty-ico">{% icon "briefcase" %}</div><p class="t">No matches above {{ threshold }} yet</p><p>Fetch new jobs, then score them. Strong matches appear here.</p></div>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Follow-ups due</h2><a class="link small" href="{% url 'scout:pipeline' %}">Open pipeline</a></div>
+      {% if followups %}
+        <div class="list">
+          {% for j in followups %}
+          <a class="li" href="{{ j.get_absolute_url }}">
+            <span class="avatar">{{ j.company|initials }}</span>
+            <span class="li-main"><b>{{ j.title }}</b><span>{{ j.company }} · applied {{ j.applied_at|date:"j M" }}</span></span>
+            <span class="li-side hot">{% with d=j.follow_up_on|days_until %}{% if d == 0 %}Due today{% else %}{{ d|cut:"-" }} day{{ d|cut:"-"|pluralize }} overdue{% endif %}{% endwith %}</span>
+          </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty"><div class="empty-ico">{% icon "clock" %}</div><p class="t">You're all caught up</p><p>Mark a job as Applied and a reminder appears 7 days later.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside>
+    <section class="panel">
+      <div class="panel-head"><h2>Claude usage today</h2><span class="muted">Pro plan</span></div>
+      <div class="panel-body">
+        <div class="meter"><div class="meter-top"><span>Jobs scored</span><span>{{ usage.scored }} / {{ usage.score_cap }}</span></div>
+          <div class="track"><span style="width: {{ usage.scored|pct:usage.score_cap }}%"></span></div></div>
+        <div class="meter"><div class="meter-top"><span>Notes drafted</span><span>{{ usage.drafted }} / {{ usage.draft_cap }}</span></div>
+          <div class="track"><span style="width: {{ usage.drafted|pct:usage.draft_cap }}%"></span></div></div>
+        <p class="muted small" style="margin:0">{{ usage.calls }} Claude call{{ usage.calls|pluralize }} today{% if usage.failed_calls %} · <span class="hot">{{ usage.failed_calls }} failed</span>{% endif %}<br>{{ usage.awaiting_score }} waiting to be scored · {{ usage.awaiting_draft }} waiting for a draft</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Job sources</h2><a class="link small" href="{% url 'scout:settings' %}#sources">Manage</a></div>
+      <div class="panel-body">
+        <ul class="sources">
+          {% for s in sources %}
+          <li><span class="dot {% if not s.enabled %}off{% elif s.state and not s.state.last_ok %}bad{% elif s.state %}ok{% endif %}"></span>
+            <span><b>{{ s.label }}</b><span class="muted small">{% if not s.enabled %}Disabled{% elif s.state.last_fetched_at %}Checked {{ s.state.last_fetched_at|ago }} ago · {{ s.state.last_message|truncatechars:90 }}{% elif s.state.last_message %}{{ s.state.last_message|truncatechars:80 }}{% else %}Not fetched yet{% endif %}</span></span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Recent activity</h2><a class="link small" href="{% url 'scout:activity' %}">View all</a></div>
+      <div class="panel-body">
+        <ul class="timeline">
+          {% for a in activity %}<li><span class="pt k-{{ a.kind }}"></span><span class="m"><span class="kind">{{ a.get_kind_display }}</span>{{ a.message|truncatechars:90 }}</span><time>{{ a.created_at|ago }}</time></li>
+          {% empty %}<li class="muted small">Nothing yet. Run <code>python manage.py fetch_jobs</code>.</li>{% endfor %}
+        </ul>
+      </div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

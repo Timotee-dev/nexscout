@@ -1,0 +1,10 @@
+{"0-legal-notice": "Remotive API...", "job-count": 2, "jobs": [
+  {"id": 2001, "url": "https://remotive.com/remote-jobs/software-dev/backend-developer-2001", "title": "Python / Django Developer (Remote)",
+   "company_name": "Acme Pay Inc.", "category": "Software Development", "tags": ["django", "python"], "job_type": "contract",
+   "publication_date": "2026-10-29T10:00:00", "candidate_required_location": "Worldwide", "salary": "$40k - $70k",
+   "description": "<p>Django and DRF backend work.</p>"},
+  {"id": 2002, "url": "https://remotive.com/remote-jobs/software-dev/python-engineer-2002", "title": "Python Engineer",
+   "company_name": "Wavelength", "category": "Software Development", "tags": ["python"], "job_type": "full_time",
+   "publication_date": "2026-10-29T10:00:00", "candidate_required_location": "EMEA", "salary": "",
+   "description": "<p>Python backend services. Contact us on Telegram to apply.</p>"}
+]}

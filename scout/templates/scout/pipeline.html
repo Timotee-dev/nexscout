@@ -1,0 +1,56 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Pipeline{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Pipeline</h1><p class="sub">Track every application from shortlist to offer. {{ skipped }} skipped job{{ skipped|pluralize }} hidden.</p></div>
+</header>
+
+{% if new_ready %}
+<section class="panel ready">
+  <div class="panel-head"><h2>Ready to shortlist</h2><span class="muted">New jobs above your threshold</span></div>
+  <div class="panel-body">
+    <div class="ready-row">
+      {% for j in new_ready %}
+      <article class="card">
+        <span class="ring sm {{ j.score|score_band }}" style="--v: {{ j.score }}"><b>{{ j.score }}</b></span>
+        <div>
+          <a href="{{ j.get_absolute_url }}" class="card-link"><b>{{ j.title }}</b><span class="muted">{{ j.company }}</span></a>
+          <form method="post" action="{% url 'scout:job_status' j.pk %}" class="card-actions">{% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'scout:pipeline' %}">
+            <button name="status" value="shortlisted" class="btn sm">Shortlist</button>
+            <button name="status" value="skipped" class="btn sm ghost">Skip</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<div class="board">
+  {% for col in columns %}
+  <section class="col" aria-label="{{ col.label }}">
+    <header><span class="badge s-{{ col.key }}">{{ col.label }}</span><span class="n">{{ col.count }}</span></header>
+    {% for j in col.jobs %}
+    <article class="card {% if j.is_followup_due %}due{% endif %}">
+      <a href="{{ j.get_absolute_url }}" class="card-link">
+        <b>{{ j.title }}</b><span class="muted">{{ j.company }}</span>
+      </a>
+      <div class="card-meta">
+        {% if j.score is not None %}<span class="tag">Score {{ j.score }}</span>{% endif %}
+        {% if j.status == 'applied' and j.follow_up_on %}<span class="{% if j.is_followup_due %}hot{% else %}muted{% endif %}">Follow up {{ j.follow_up_on|date:"j M" }}</span>{% endif %}
+        {% if j.notes %}<span class="muted" title="{{ j.notes }}">Has notes</span>{% endif %}
+      </div>
+      <form method="post" action="{% url 'scout:job_status' j.pk %}" class="move">{% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'scout:pipeline' %}">
+        <select name="status" aria-label="Move {{ j.title }}" data-autosubmit-select>
+          {% for v, l in statuses %}<option value="{{ v }}" {% if v == j.status %}selected{% endif %}>{% if v == j.status %}{{ l }}{% else %}Move to {{ l }}{% endif %}</option>{% endfor %}
+        </select>
+      </form>
+    </article>
+    {% empty %}<p class="col-empty">No jobs here yet</p>{% endfor %}
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

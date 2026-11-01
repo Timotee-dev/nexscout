@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+<channel><title>We Work Remotely: Back-End Programming Jobs</title>
+<item>
+  <title>Nimbus Labs: Junior Backend Developer (Python)</title>
+  <region>Anywhere in the World</region>
+  <category>Back-End Programming</category>
+  <type>Full-Time</type>
+  <description>&lt;p&gt;Work on our Django APIs. You must be authorized to work in the United States.&lt;/p&gt;</description>
+  <pubDate>Thu, 29 Oct 2026 12:00:00 +0000</pubDate>
+  <guid>https://weworkremotely.com/remote-jobs/nimbus-labs-junior-backend-developer-python</guid>
+  <link>https://weworkremotely.com/remote-jobs/nimbus-labs-junior-backend-developer-python</link>
+</item>
+<item>
+  <title>Orbit: Python Backend Engineer</title>
+  <region>Africa, Europe</region>
+  <type>Contract</type>
+  <description>&lt;p&gt;Django, Celery, PostgreSQL.&lt;/p&gt;</description>
+  <pubDate>Mon, 01 Sep 2026 12:00:00 +0000</pubDate>
+  <guid>https://weworkremotely.com/remote-jobs/orbit-python-backend-engineer</guid>
+  <link>https://weworkremotely.com/remote-jobs/orbit-python-backend-engineer</link>
+</item>
+</channel></rss>

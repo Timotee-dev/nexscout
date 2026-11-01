@@ -1,0 +1,4 @@
+Django>=5.2.8,<6.1
+requests>=2.32
+python-dotenv>=1.0
+# For PostgreSQL later: psycopg[binary]>=3.2

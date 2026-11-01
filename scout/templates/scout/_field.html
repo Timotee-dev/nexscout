@@ -1,0 +1,5 @@
+<div class="field{% if wide %} wide{% endif %}">
+  <label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+  {% if f.help_text %}<span class="help">{{ f.help_text }}</span>{% endif %}
+  {% for e in f.errors %}<span class="err">{{ e }}</span>{% endfor %}
+</div>

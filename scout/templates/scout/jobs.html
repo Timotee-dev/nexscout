@@ -1,0 +1,140 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Jobs</h1><p class="sub">{{ page.paginator.count }} job{{ page.paginator.count|pluralize }} · sorted by {% if sort == 'score' %}best match{% elif sort == '-score' %}lowest score{% elif sort == 'posted' %}newest{% elif sort == '-posted' %}oldest{% elif sort == 'found' %}recently found{% else %}company{% endif %}</p></div>
+  <nav class="seg" aria-label="Which jobs">
+    <a href="?view=open" class="{% if view == 'open' %}on{% endif %}">Open<i>{{ counts.open }}</i></a>
+    <a href="?view=filtered" class="{% if view == 'filtered' %}on{% endif %}">Filtered out<i>{{ counts.filtered }}</i></a>
+    <a href="?view=all" class="{% if view == 'all' %}on{% endif %}">All</a>
+  </nav>
+</header>
+
+<form class="toolbar" method="get" data-autosubmit>
+  <input type="hidden" name="view" value="{{ view }}">
+  <label class="search">{% icon "search" %}<input type="search" name="q" value="{{ q }}" placeholder="Search title, company or description" aria-label="Search"></label>
+  <select name="status" aria-label="Status"><option value="">All statuses</option>
+    {% for v, l in statuses %}<option value="{{ v }}" {% if v == status %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="source" aria-label="Source"><option value="">All sources</option>
+    {% for v, l in sources %}<option value="{{ v }}" {% if v == source %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="min" aria-label="Minimum score"><option value="">Any score</option>
+    <option value="50" {% if min_score == "50" %}selected{% endif %}>50 and above</option>
+    <option value="{{ threshold }}" {% if min_score == threshold|stringformat:"s" %}selected{% endif %}>{{ threshold }} and above</option>
+    <option value="80" {% if min_score == "80" %}selected{% endif %}>80 and above</option></select>
+  <select name="sort" aria-label="Sort">
+    <option value="score" {% if sort == 'score' %}selected{% endif %}>Best match</option>
+    <option value="posted" {% if sort == 'posted' %}selected{% endif %}>Newest posted</option>
+    <option value="-posted" {% if sort == '-posted' %}selected{% endif %}>Oldest posted</option>
+    <option value="found" {% if sort == 'found' %}selected{% endif %}>Recently found</option>
+    <option value="company" {% if sort == 'company' %}selected{% endif %}>Company A–Z</option>
+    <option value="-score" {% if sort == '-score' %}selected{% endif %}>Lowest score</option></select>
+  <label class="chk"><input type="checkbox" name="drafted" value="1" {% if request.GET.drafted %}checked{% endif %}>Has draft</label>
+  <label class="chk"><input type="checkbox" name="flags" value="1" {% if request.GET.flags %}checked{% endif %}>Scam warnings</label>
+  <noscript><button class="btn">Apply</button></noscript>
+</form>
+
+{% if page.object_list %}
+<div class="split {% if explicit %}explicit{% endif %}">
+  <div class="joblist">
+    <div class="joblist-head"><span>Showing {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}</span><span>Score</span></div>
+    {% for j in page.object_list %}
+    <a class="jrow {% if selected and j.pk == selected.pk %}sel{% endif %} {% if not j.passed_filter or j.status == 'skipped' %}dim{% endif %}" href="{% querystring job=j.pk %}" data-detail="{{ j.get_absolute_url }}">
+      {% if j.score is not None %}<span class="ring sm {{ j.score|score_band:threshold }}" style="--v: {{ j.score }}"><b>{{ j.score }}</b></span>
+      {% else %}<span class="ring sm none" title="{% if j.passed_filter %}Not scored yet{% else %}Filtered out{% endif %}"><b>–</b></span>{% endif %}
+      <span style="min-width:0">
+        <span class="jrow-title">{{ j.title }}</span>
+        <span class="jrow-sub" style="display:block">{{ j.company|default:"Unknown company" }} · {{ j.location|default:"Remote" }}</span>
+        <span class="jrow-meta">
+          <span class="badge s-{{ j.status }}">{{ j.get_status_display }}</span>
+          {% if j.is_followup_due %}<span class="tag hot">Follow up</span>{% endif %}
+          {% if j.drafted_at %}<span class="tag accent">Draft</span>{% endif %}
+          {% if j.has_scam_risk %}<span class="tag warn">Review</span>{% endif %}
+          {% if not j.passed_filter %}<span class="tag" title="{{ j.filter_reasons|join:'; ' }}">{{ j.filter_reasons.0|truncatechars:30 }}</span>{% endif %}
+          <span class="when">{{ j.posted_at|ago }}</span>
+        </span>
+      </span>
+    </a>
+    {% endfor %}
+    {% if page.has_other_pages %}
+    <nav class="pager">
+      {% if page.has_previous %}<a class="btn sm" href="{% querystring page=page.previous_page_number job=None %}">Previous</a>{% else %}<span></span>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="btn sm" href="{% querystring page=page.next_page_number job=None %}">Next</a>{% else %}<span></span>{% endif %}
+    </nav>
+    {% endif %}
+  </div>
+
+  {% if selected %}
+  <aside class="preview" aria-label="Job preview">
+    <section class="panel">
+      <div class="pv-head">
+        {% if selected.score is not None %}<span class="ring xl {{ selected.score|score_band:threshold }}" style="--v: {{ selected.score }}"><b>{{ selected.score }}</b></span>
+        {% else %}<span class="ring xl none"><b>–</b></span>{% endif %}
+        <div style="min-width:0">
+          <h2>{{ selected.title }}</h2>
+          <p class="co">{{ selected.company|default:"Unknown company" }}{% if selected.also_seen_on %} <span class="muted small">· also listed on {{ selected.also_seen_on|length }} other board{{ selected.also_seen_on|length|pluralize }}</span>{% endif %}</p>
+          <div class="chips" style="margin-top:10px"><span class="badge s-{{ selected.status }}">{{ selected.get_status_display }}</span>
+            {% if selected.open_to_nigeria == 'yes' %}<span class="tag ok">Open to Nigeria</span>{% elif selected.open_to_nigeria == 'no' %}<span class="tag warn">Not open to Nigeria</span>{% endif %}
+            {% if selected.seniority_guess and selected.seniority_guess != 'unclear' %}<span class="tag">{{ selected.seniority_guess|capfirst }} level</span>{% endif %}</div>
+        </div>
+      </div>
+      <dl class="pv-facts">
+        <div><dt>Location</dt><dd title="{{ selected.location }}">{{ selected.location|default:"Remote" }}</dd></div>
+        <div><dt>Salary</dt><dd title="{{ selected.salary }}">{{ selected.salary|default:"Not listed" }}</dd></div>
+        <div><dt>Posted</dt><dd>{% if selected.posted_at %}{{ selected.posted_at|date:"j M" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Source</dt><dd>{{ selected.source|source_label }}</dd></div>
+      </dl>
+      <div class="pv-body">
+        {% if selected.scam_flags or selected.ai_red_flags %}
+          <div class="callout warn small" style="margin:0">{% icon "alert" %}<div><b>Possible scam.</b> {{ selected.scam_flags|join:"; " }}{% if selected.ai_red_flags %}{% if selected.scam_flags %}; {% endif %}{{ selected.ai_red_flags|join:"; " }}{% endif %}</div></div>
+        {% endif %}
+        {% if not selected.passed_filter %}
+          <div class="callout small" style="margin:0">{% icon "info" %}<div>Filtered out: {{ selected.filter_reasons|join:" · " }}</div></div>
+        {% endif %}
+        <div class="pv-sec">
+          <h3>Why this score</h3>
+          {% if selected.score is not None %}<p style="margin:0">{{ selected.score_reason }}</p>
+          {% elif selected.score_error %}<p class="muted" style="margin:0">Scoring failed: {{ selected.score_error }}</p>
+          {% else %}<p class="muted" style="margin:0">Not scored yet. It will be picked up on the next scoring run.</p>{% endif %}
+        </div>
+        {% if selected.matched_skills or selected.missing_skills %}
+        <div class="pv-sec">
+          <h3>Skills</h3>
+          {% if selected.matched_skills %}<p class="chips"><span class="lbl">You have</span>{% for s in selected.matched_skills %}<span class="tag ok">{{ s }}</span>{% endfor %}</p>{% endif %}
+          {% if selected.missing_skills %}<p class="chips" style="margin-top:6px"><span class="lbl">Gaps</span>{% for s in selected.missing_skills %}<span class="tag">{{ s }}</span>{% endfor %}</p>{% endif %}
+        </div>
+        {% endif %}
+        {% if selected.cover_note %}
+        <div class="pv-sec">
+          <h3>Draft cover note{% if selected_project %} · uses {{ selected_project.name }}{% endif %}</h3>
+          <p class="pv-quote" id="pv-note">{{ selected.cover_note }}</p>
+        </div>
+        {% endif %}
+      </div>
+      <div class="pv-actions">
+        <a class="btn primary" href="{{ selected.get_absolute_url }}">Open job</a>
+        <a class="btn" href="{{ selected.listing_url }}" target="_blank" rel="noopener noreferrer">{% icon "external" %}Listing</a>
+        {% if selected.cover_note %}<button type="button" class="btn" data-copy="#pv-note">{% icon "copy" %}Copy note</button>{% endif %}
+        <span class="spacer"></span>
+        <form method="post" action="{% url 'scout:job_status' selected.pk %}" class="inline">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          {% if selected.status != 'shortlisted' %}<button name="status" value="shortlisted" class="btn ghost">Shortlist</button>{% endif %}
+          {% if selected.status != 'skipped' %}<button name="status" value="skipped" class="btn ghost">Skip</button>{% endif %}
+        </form>
+      </div>
+    </section>
+  </aside>
+  {% endif %}
+</div>
+{% else %}
+  <section class="panel">
+    <div class="empty">
+      <div class="empty-ico">{% icon "inbox" %}</div>
+      {% if view == 'open' and not q and not status %}
+        <p class="t">No jobs yet</p><p>Run <code>python manage.py fetch_jobs</code> or fetch from the Overview.</p>
+        <form method="post" action="{% url 'scout:run' %}" data-busy="Fetching new jobs from the boards…">{% csrf_token %}<input type="hidden" name="action" value="fetch"><button class="btn primary">Fetch jobs now</button></form>
+      {% else %}<p class="t">No jobs match these filters</p><p><a class="link" href="?view={{ view }}">Clear filters</a></p>{% endif %}
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,10 @@
+{"jobs": [
+ {"title": "Backend Engineer (Python)", "excerpt": "APIs", "companyName": "Northwind", "companySlug": "northwind",
+  "employmentType": "Full Time", "minSalary": 50000, "maxSalary": 80000, "salaryPeriod": "annual", "currency": "USD",
+  "seniority": ["Mid-level"], "locationRestrictions": [{"name": "Nigeria"}, {"name": "Kenya"}], "timezoneRestrictions": [1],
+  "categories": ["Python", "Backend"], "description": "<p>Python services.</p>", "pubDate": 1761868800, "expiryDate": 1764460800,
+  "applicationLink": "https://northwind.example/jobs/1", "guid": "https://himalayas.app/companies/northwind/jobs/backend-engineer-python"},
+ {"title": "Django Developer", "companyName": "Solo", "companySlug": "solo", "locationRestrictions": [],
+  "description": "<p>Django.</p>", "pubDate": 1761868800, "applicationLink": "https://solo.example/apply",
+  "guid": "https://himalayas.app/companies/solo/jobs/django-developer"}
+], "totalCount": 2}

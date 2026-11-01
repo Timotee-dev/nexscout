@@ -1,0 +1,15 @@
+[
+  {"last_updated": 1761900000, "legal": "API Terms of Service: Please link back to the URL on Remote OK and mention Remote OK as a source."},
+  {"slug": "remote-python-django-developer-acme-1001", "id": "1001", "epoch": 1761800000, "date": "2026-10-30T05:00:00+00:00",
+   "company": "Acme Pay", "position": "Python/Django Developer", "tags": ["python", "django", "payments"],
+   "description": "<p>Build our <b>payments</b> API with Django REST Framework and Stripe webhooks. 2+ years of experience.</p>",
+   "location": "Worldwide", "salary_min": 40000, "salary_max": 70000,
+   "apply_url": "https://remoteok.com/remote-jobs/1001/apply", "url": "https://remoteok.com/remote-jobs/remote-python-django-developer-acme-1001"},
+  {"slug": "senior-backend-engineer-bigco-1002", "id": "1002", "epoch": 1761800000, "date": "2026-10-30T05:00:00+00:00",
+   "company": "BigCo", "position": "Senior Backend Engineer", "tags": ["python", "backend"],
+   "description": "<p>7+ years of experience with Python required.</p>", "location": "USA only",
+   "salary_min": 0, "salary_max": 0, "url": "https://remoteok.com/remote-jobs/1002"},
+  {"slug": "marketing-1003", "id": "1003", "epoch": 1761800000, "date": "2026-10-30T05:00:00+00:00",
+   "company": "Brandly", "position": "Content Marketer", "tags": ["marketing"],
+   "description": "<p>Write blog posts.</p>", "location": "", "url": "https://remoteok.com/remote-jobs/1003"}
+]

@@ -1,0 +1,156 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}{{ job.title }}{% endblock %}
+{% block content %}
+<nav class="crumbs"><a href="{% url 'scout:jobs' %}">Jobs</a><span class="sep">/</span><span>{{ job.company|default:"Unknown company" }}</span></nav>
+
+<section class="panel">
+  <div class="hero">
+    <span class="avatar lg">{{ job.company|initials }}</span>
+    <div class="hero-main">
+      <h1>{{ job.title }}</h1>
+      <p class="co">{{ job.company|default:"Unknown company" }}</p>
+      <p class="meta">
+        <span>{% icon "pin" %}{{ job.location|default:"No location restriction" }}</span>
+        {% if job.salary %}<span>{% icon "money" %}{{ job.salary }}</span>{% endif %}
+        {% if job.job_type %}<span>{% icon "briefcase" %}{{ job.job_type|capfirst }}</span>{% endif %}
+        {% if job.posted_at %}<span>{% icon "clock" %}Posted {{ job.posted_at|date:"j M" }} ({{ job.posted_at|ago }} ago)</span>{% endif %}
+        <span>{% icon "globe" %}{{ source_label }}{% for s in also_seen %} · <a class="link" href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.label }}</a>{% endfor %}</span>
+      </p>
+    </div>
+    <div class="hero-cta">
+      {% if job.apply_url and job.apply_url != job.url %}<a class="btn" href="{{ job.apply_url }}" target="_blank" rel="noopener noreferrer">Apply page</a>{% endif %}
+      <a class="btn primary" href="{{ job.listing_url }}" target="_blank" rel="noopener noreferrer">{% icon "external" %}Open listing</a>
+    </div>
+  </div>
+</section>
+
+{% if job.scam_flags or job.ai_red_flags %}
+<div class="callout warn" role="alert">{% icon "alert" %}
+  <div><b>This listing shows signs of a scam.</b> Check the company before you share anything.
+  <ul>{% for f in job.scam_flags %}<li>{{ f }}</li>{% endfor %}{% for f in job.ai_red_flags %}<li>{{ f }} <span class="muted">(Claude)</span></li>{% endfor %}</ul></div>
+</div>
+{% endif %}
+{% if not job.passed_filter %}
+<div class="callout">{% icon "info" %}
+  <div class="grow">Filtered out by your rules: {{ job.filter_reasons|join:" · " }}</div>
+  <form method="post" action="{% url 'scout:job_action' job.pk %}" class="inline">{% csrf_token %}
+    <input type="hidden" name="action" value="restore"><button class="btn sm">Restore</button></form>
+</div>
+{% endif %}
+
+<div class="layout-2">
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Fit analysis</h2>
+        <form method="post" action="{% url 'scout:job_action' job.pk %}" data-busy="Claude is scoring this job…" class="inline">{% csrf_token %}
+          <input type="hidden" name="action" value="rescore"><button class="btn sm ghost">{% icon "refresh" %}{% if job.score is None %}Score now{% else %}Re-score{% endif %}</button></form></div>
+      <div class="panel-body fit">
+        <div class="fit-score">
+          {% if job.score is not None %}<span class="ring xl {{ job.score|score_band:threshold }}" style="--v: {{ job.score }}"><b>{{ job.score }}</b></span>
+          {% else %}<span class="ring xl none"><b>–</b></span>{% endif %}
+          <span class="muted">Threshold {{ threshold }}</span>
+        </div>
+        <div>
+          {% if job.score is not None %}
+            <p class="reason">{{ job.score_reason }}</p>
+            <dl class="facts">
+              <div><dt>Seniority</dt><dd>{{ job.seniority_guess|default:"—" }}</dd></div>
+              <div><dt>Open to Nigeria</dt><dd class="ng-{{ job.open_to_nigeria }}">{{ job.get_open_to_nigeria_display|default:"—" }}</dd></div>
+              <div><dt>Scored</dt><dd>{{ job.scored_at|date:"j M, H:i" }}</dd></div>
+            </dl>
+            {% if job.matched_skills %}<p class="chips"><span class="lbl">You have</span>{% for s in job.matched_skills %}<span class="tag ok">{{ s }}</span>{% endfor %}</p>{% endif %}
+            {% if job.missing_skills %}<p class="chips"><span class="lbl">Gaps</span>{% for s in job.missing_skills %}<span class="tag">{{ s }}</span>{% endfor %}</p>{% endif %}
+          {% elif job.score_error %}<p class="reason">Scoring failed: {{ job.score_error }}</p>
+          {% else %}<p class="reason muted">Not scored yet. The next <code>score_jobs</code> run will pick it up.</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Application draft</h2>
+        {% if job.drafted_at %}<span class="muted">{% if project %}Uses {{ project.name }} · {% endif %}drafted {{ job.drafted_at|ago }} ago</span>{% endif %}</div>
+      <div class="panel-body">
+      {% if job.drafted_at or job.cover_note %}
+        {% if job.draft_warnings %}<div class="callout warn small">{% icon "alert" %}<div><b>Check before sending</b><ul>{% for w in job.draft_warnings %}<li>{{ w }}</li>{% endfor %}</ul></div></div>{% endif %}
+        <form method="post" action="{% url 'scout:job_save' job.pk %}" class="draft" data-ajax-save>{% csrf_token %}
+          <input type="hidden" name="part" value="draft">
+          <div class="field">
+            <div class="field-head"><label for="id_cover_note">Cover note</label><span class="wc" data-for="id_cover_note"></span>
+              <button type="button" class="btn sm" data-copy="#id_cover_note">{% icon "copy" %}Copy</button></div>
+            {{ draft_form.cover_note }}
+          </div>
+          <div class="field">
+            <div class="field-head"><label for="id_opener">LinkedIn / email opener</label>
+              <button type="button" class="btn sm" data-copy="#id_opener">{% icon "copy" %}Copy</button></div>
+            {{ draft_form.opener }}
+          </div>
+          <div class="row-actions">
+            <button class="btn primary">Save changes</button><span class="saved" aria-live="polite"></span>
+            <span style="flex:1"></span>
+          </div>
+        </form>
+        <form method="post" action="{% url 'scout:job_action' job.pk %}" data-busy="Claude is rewriting the draft…" data-confirm="Replace this draft with a new one? Your edits will be lost." class="inline" style="margin-top:10px">{% csrf_token %}
+          <input type="hidden" name="action" value="redraft"><button class="btn sm ghost">{% icon "refresh" %}Generate a new draft</button></form>
+      {% else %}
+        <div class="empty"><div class="empty-ico">{% icon "pen" %}</div><p class="t">No draft yet</p>
+          <p>{% if job.score is not None and job.score >= threshold %}This job is above your threshold, so the next drafting run will write one.{% else %}Drafts are written automatically for jobs scoring {{ threshold }}+.{% endif %}</p>
+          <form method="post" action="{% url 'scout:job_action' job.pk %}" data-busy="Claude is drafting…">{% csrf_token %}
+            <input type="hidden" name="action" value="redraft"><button class="btn">Draft one now</button></form>
+        </div>
+      {% endif %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Job description</h2></div>
+      <div class="panel-body">
+        <div class="desc">{{ job.description|linebreaks }}</div>
+        {% if job.tags %}<p class="chips" style="margin-top:12px">{% for t in job.tags %}<span class="tag">{{ t }}</span>{% endfor %}</p>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  <aside class="side">
+    <section class="panel">
+      <div class="panel-head"><h2>Status</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{% url 'scout:job_status' job.pk %}" class="status-picker">{% csrf_token %}
+          {% for v, l in statuses %}
+            <button name="status" value="{{ v }}" class="st {% if job.status == v %}on{% endif %}" {% if job.status == v %}aria-pressed="true"{% endif %}>{{ l }}</button>
+          {% endfor %}
+        </form>
+        {% if job.status == 'applied' %}
+          <div class="followup {% if job.is_followup_due %}due{% endif %}">
+            <span>Follow up {% if job.follow_up_on %}<b>{{ job.follow_up_on|date:"D j M" }}</b>{% else %}—{% endif %}</span>
+            <form method="post" action="{% url 'scout:job_action' job.pk %}" class="inline">{% csrf_token %}
+              <input type="hidden" name="action" value="followed_up"><button class="btn sm">I followed up</button></form>
+          </div>
+        {% endif %}
+        {% if job.applied_at %}<p class="meta-line">Applied {{ job.applied_at|date:"D j M Y" }}</p>{% endif %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Notes</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{% url 'scout:job_save' job.pk %}">{% csrf_token %}
+          <input type="hidden" name="part" value="notes">
+          {{ notes_form.notes }}
+          <label for="id_follow_up_on">Follow-up date</label>
+          {{ notes_form.follow_up_on }}
+          <button class="btn sm">Save notes</button>
+        </form>
+      </div>
+    </section>
+
+    {% if activity %}
+    <section class="panel">
+      <div class="panel-head"><h2>History</h2></div>
+      <div class="panel-body">
+        <ul class="timeline">{% for a in activity %}<li><span class="pt k-{{ a.kind }}"></span><span class="m"><span class="kind">{{ a.get_kind_display }}</span>{{ a.message|truncatechars:80 }}</span><time>{{ a.created_at|ago }}</time></li>{% endfor %}</ul>
+      </div>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

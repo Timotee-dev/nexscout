@@ -1,0 +1,48 @@
+{% load static scout_tags %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>{% block title %}NexScout{% endblock %} · NexScout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;650;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'scout/css/app.css' %}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1729'/%3E%3Ccircle cx='14.5' cy='14.5' r='6' fill='none' stroke='white' stroke-width='2.6'/%3E%3Cpath d='M19 19l5 5' stroke='%235b84f0' stroke-width='2.8' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="header">
+  <div class="header-in">
+    <a class="brand" href="{% url 'scout:overview' %}">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" stroke="#fff" stroke-width="2.4"/><path d="M15 15l5 5" stroke="#5b84f0" stroke-width="2.6" stroke-linecap="round"/></svg></span>
+      NexScout
+    </a>
+    <nav class="tabs" aria-label="Main">
+      <a href="{% url 'scout:overview' %}" class="{% if nav_section == 'overview' %}on{% endif %}">Overview</a>
+      <a href="{% url 'scout:jobs' %}" class="{% if nav_section == 'jobs' or nav_section == 'job_detail' %}on{% endif %}">Jobs{% if nav_new %}<span class="count">{{ nav_new }}</span>{% endif %}</a>
+      <a href="{% url 'scout:pipeline' %}" class="{% if nav_section == 'pipeline' %}on{% endif %}">Pipeline{% if nav_due %}<span class="count alert" title="Follow-ups due">{{ nav_due }}</span>{% endif %}</a>
+      <a href="{% url 'scout:outreach' %}" class="{% if 'outreach' in nav_section %}on{% endif %}">Outreach{% if nav_outreach %}<span class="count">{{ nav_outreach }}</span>{% endif %}</a>
+      <a href="{% url 'scout:activity' %}" class="{% if nav_section == 'activity' %}on{% endif %}">Activity</a>
+      <a href="{% url 'scout:settings' %}" class="{% if nav_section == 'settings' %}on{% endif %}">Settings</a>
+    </nav>
+    <div class="header-right">
+      <span class="usage-pill" title="Jobs scored by Claude today">Claude today
+        <span class="track"><span style="width: {{ nav_scored|pct:nav_score_cap }}%"></span></span>
+        <span class="num">{{ nav_scored }}/{{ nav_score_cap }}</span></span>
+      <span class="me" title="Timothy Arifalo">TA</span>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  {% if messages %}
+    <div class="toasts" role="status">
+      {% for m in messages %}<div class="toast {{ m.tags }}"><span class="toast-ico">{% if m.tags == 'error' %}!{% else %}✓{% endif %}</span><span>{{ m }}</span><button type="button" class="x" aria-label="Dismiss">×</button></div>{% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+<script src="{% static 'scout/js/app.js' %}" defer></script>
+</body>
+</html>

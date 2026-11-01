@@ -1,0 +1,67 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}{{ t.company_name }}{% endblock %}
+{% block content %}
+<nav class="crumbs"><a href="{% url 'scout:outreach' %}">Outreach</a><span class="sep">/</span><span>{{ t.company_name }}</span></nav>
+
+<section class="panel">
+  <div class="hero">
+    <span class="avatar lg">{{ t.company_name|initials }}</span>
+    <div class="hero-main">
+      <h1>{{ t.company_name }}</h1>
+      <p class="co">{% if t.contact_name %}{{ t.contact_name }}{% if t.contact_role %}, {{ t.contact_role }}{% endif %}{% else %}No contact person yet{% endif %}</p>
+      <p class="meta">
+        <span class="badge o-{{ t.status }}">{{ t.get_status_display }}</span>
+        <span>{{ t.get_channel_display }}</span>
+        {% if t.website %}<a class="link" href="{{ t.website }}" target="_blank" rel="noopener noreferrer">Website</a>{% endif %}
+        {% if t.linkedin_url %}<a class="link" href="{{ t.linkedin_url }}" target="_blank" rel="noopener noreferrer">LinkedIn</a>{% endif %}
+      </p>
+    </div>
+  </div>
+</section>
+
+<div class="layout-2">
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Message</h2>{% if project %}<span class="muted">Uses {{ project.name }}</span>{% endif %}</div>
+      <div class="panel-body">
+        {% if t.draft_error %}<div class="callout warn small">{% icon "alert" %}<div>{{ t.draft_error }}</div></div>{% endif %}
+        <form method="post">{% csrf_token %}
+          <div class="field">
+            <div class="field-head"><label for="id_message">Your message</label><span class="wc" data-for="id_message"></span>
+              <button type="button" class="btn sm" data-copy="#id_message">{% icon "copy" %}Copy</button></div>
+            {{ form.message }}
+          </div>
+          <div class="field"><label for="id_notes">Notes</label>{{ form.notes }}</div>
+          <button class="btn primary">Save changes</button>
+        </form>
+        <form method="post" action="{% url 'scout:outreach_action' t.pk %}" data-busy="Claude is drafting…" {% if t.message %}data-confirm="Replace the current message with a new draft?"{% endif %} class="inline" style="margin-top:10px">{% csrf_token %}
+          <input type="hidden" name="action" value="draft"><button class="btn sm ghost">{% icon "refresh" %}{% if t.message %}Generate a new draft{% else %}Draft with Claude{% endif %}</button></form>
+      </div>
+    </section>
+  </div>
+  <aside class="side">
+    <section class="panel">
+      <div class="panel-head"><h2>Status</h2></div>
+      <div class="panel-body">
+        <form method="post" action="{% url 'scout:outreach_action' t.pk %}" class="status-picker">{% csrf_token %}
+          <input type="hidden" name="action" value="status">
+          {% for v, l in statuses %}<button name="status" value="{{ v }}" class="st {% if t.status == v %}on{% endif %}">{{ l }}</button>{% endfor %}
+        </form>
+        {% if t.sent_at %}<p class="meta-line">Marked sent {{ t.sent_at|date:"D j M Y" }}</p>{% endif %}
+      </div>
+    </section>
+    <details class="panel">
+      <summary><h2>Company details</h2></summary>
+      <div class="panel-body">
+        <form method="post" class="stack">{% csrf_token %}
+          <input type="hidden" name="part" value="details">
+          {% for f in edit %}<div class="field"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% for e in f.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>{% endfor %}
+          <button class="btn sm">Save details</button>
+        </form>
+      </div>
+    </details>
+    <form method="post" action="{% url 'scout:outreach_action' t.pk %}" data-confirm="Remove {{ t.company_name }} from your list?">{% csrf_token %}
+      <input type="hidden" name="action" value="delete"><button class="btn sm danger">Remove from list</button></form>
+  </aside>
+</div>
+{% endblock %}

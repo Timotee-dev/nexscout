@@ -1,0 +1,44 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Activity{% endblock %}
+{% block content %}
+<header class="page-head"><div><h1>Activity</h1><p class="sub">Everything NexScout did, newest first.</p></div></header>
+
+<nav class="seg small" aria-label="Filter by kind">
+  <a href="?" class="{% if not kind %}on{% endif %}">All</a>
+  {% for v, l in kinds %}<a href="?kind={{ v }}" class="{% if v == kind %}on{% endif %}">{{ l }}</a>{% endfor %}
+</nav>
+
+<div class="layout-2">
+  <section class="panel">
+    <div class="panel-body">
+      <ul class="timeline">
+        {% for a in page.object_list %}
+        <li><span class="pt k-{{ a.kind }}"></span>
+          <span class="m"><span class="kind">{{ a.get_kind_display }}</span>{{ a.message }}{% if a.job %} · <a class="link" href="{{ a.job.get_absolute_url }}">View job</a>{% endif %}</span>
+          <time title="{{ a.created_at }}">{{ a.created_at|date:"j M, H:i" }}</time></li>
+        {% empty %}<li class="muted">No activity yet.</li>{% endfor %}
+      </ul>
+    </div>
+    {% if page.has_other_pages %}<nav class="pager">
+      {% if page.has_previous %}<a class="btn sm" href="{% querystring page=page.previous_page_number %}">Newer</a>{% else %}<span></span>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="btn sm" href="{% querystring page=page.next_page_number %}">Older</a>{% else %}<span></span>{% endif %}</nav>{% endif %}
+  </section>
+  <aside>
+    <section class="panel">
+      <div class="panel-head"><h2>Claude calls, last 7 days</h2></div>
+      {% if by_day %}<table class="plain"><thead><tr><th>Day</th><th>Calls</th><th>Items</th></tr></thead>
+        <tbody>{% for d in by_day %}<tr><td>{{ d.day|date:"D j M" }}</td><td class="num">{{ d.n }}</td><td class="num">{{ d.items }}</td></tr>{% endfor %}</tbody></table>
+      {% else %}<div class="panel-body"><p class="muted small" style="margin:0">No Claude calls yet.</p></div>{% endif %}
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Recent calls</h2></div>
+      <div class="panel-body">
+        <ul class="timeline">{% for c in calls %}<li><span class="pt {% if c.ok %}k-score{% else %}k-error{% endif %}"></span>
+          <span class="m"><span class="kind">{{ c.purpose }}</span>{{ c.items }} item{{ c.items|pluralize }} · {{ c.duration_ms|floatformat:0 }} ms{% if c.error %} · {{ c.error|truncatechars:60 }}{% endif %}</span>
+          <time>{{ c.created_at|ago }}</time></li>{% empty %}<li class="muted small">None yet.</li>{% endfor %}</ul>
+      </div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

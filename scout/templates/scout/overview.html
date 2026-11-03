@@ -75,6 +75,8 @@
           <div class="track"><span style="width: {{ usage.scored|pct:usage.score_cap }}%"></span></div></div>
         <div class="meter"><div class="meter-top"><span>Notes drafted</span><span>{{ usage.drafted }} / {{ usage.draft_cap }}</span></div>
           <div class="track"><span style="width: {{ usage.drafted|pct:usage.draft_cap }}%"></span></div></div>
+        <div class="meter"><div class="meter-top"><span>Applications sent</span><span>{{ usage.sent }} / {{ usage.send_cap }}</span></div>
+          <div class="track"><span style="width: {{ usage.sent|pct:usage.send_cap }}%"></span></div></div>
         <p class="muted small" style="margin:0">{{ usage.calls }} Claude call{{ usage.calls|pluralize }} today{% if usage.failed_calls %} · <span class="hot">{{ usage.failed_calls }} failed</span>{% endif %}<br>{{ usage.awaiting_score }} waiting to be scored · {{ usage.awaiting_draft }} waiting for a draft</p>
       </div>
     </section>

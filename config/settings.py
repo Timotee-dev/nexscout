@@ -131,3 +131,18 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
     "loggers": {"scout": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")}},
 }
+
+# --- Sending applications (Gmail) -------------------------------------------
+# Use a Gmail App Password (Google Account -> Security -> 2-Step Verification -> App passwords),
+# never your normal password. Leave blank and NexScout simply won't send anything.
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "").replace(" ", "")
+EMAIL_TIMEOUT = 30
+SENDER_NAME = os.getenv("SENDER_NAME", "Timothy Arifalo")
+DEFAULT_FROM_EMAIL = f"{SENDER_NAME} <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "nexscout@localhost"
+# Your CV, attached to every application email.
+CV_PATH = os.getenv("CV_PATH") or str(BASE_DIR / "cv.pdf")

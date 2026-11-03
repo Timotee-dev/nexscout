@@ -47,6 +47,7 @@
         <span class="jrow-meta">
           <span class="badge s-{{ j.status }}">{{ j.get_status_display }}</span>
           {% if j.is_followup_due %}<span class="tag hot">Follow up</span>{% endif %}
+          {% if j.email_sent_at %}<span class="tag ok">Emailed</span>{% elif j.apply_email %}<span class="tag">By email</span>{% endif %}
           {% if j.drafted_at %}<span class="tag accent">Draft</span>{% endif %}
           {% if j.has_scam_risk %}<span class="tag warn">Review</span>{% endif %}
           {% if not j.passed_filter %}<span class="tag" title="{{ j.filter_reasons|join:'; ' }}">{{ j.filter_reasons.0|truncatechars:30 }}</span>{% endif %}

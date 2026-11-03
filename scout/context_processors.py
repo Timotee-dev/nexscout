@@ -17,4 +17,9 @@ def nav(request):
         "nav_scored": Job.objects.filter(scored_at__date=today).count(),
         "nav_score_cap": s.daily_score_cap,
         "nav_section": match.url_name,
+        "autopilot_on": bool(s.autopilot_last_beat
+                             and (timezone.now() - s.autopilot_last_beat).total_seconds() < 180),
+        "autopilot_paused": not s.autopilot_enabled,
+        "autopilot_last_cycle": s.autopilot_last_cycle,
+        "autopilot_last_summary": s.autopilot_last_summary,
     }

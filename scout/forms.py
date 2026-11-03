@@ -6,7 +6,7 @@ from .models import Job, OutreachTarget, Profile, ScoutSettings
 class SettingsForm(forms.ModelForm):
     class Meta:
         model = ScoutSettings
-        exclude = ["updated_at"]
+        exclude = ["updated_at", "autopilot_last_beat", "autopilot_last_cycle", "autopilot_last_summary"]
         widgets = {
             "keywords": forms.Textarea(attrs={"rows": 2}),
             "allowed_locations": forms.Textarea(attrs={"rows": 2}),
@@ -23,6 +23,12 @@ class SettingsForm(forms.ModelForm):
         v = self.cleaned_data["draft_batch_size"]
         if not 1 <= v <= 5:
             raise forms.ValidationError("Use 1–5 jobs per call.")
+        return v
+
+    def clean_autopilot_every_minutes(self):
+        v = self.cleaned_data["autopilot_every_minutes"]
+        if v < 30:
+            raise forms.ValidationError("30 minutes or more, to keep job boards and Claude usage happy.")
         return v
 
     def clean_min_score(self):
@@ -54,6 +60,17 @@ class JobDraftForm(forms.ModelForm):
             "cover_note": forms.Textarea(attrs={"rows": 9, "data-wordcount": "150"}),
             "opener": forms.Textarea(attrs={"rows": 2}),
         }
+
+
+class JobEmailForm(forms.ModelForm):
+    class Meta:
+        model = Job
+        fields = ["apply_email", "email_subject", "email_body"]
+        widgets = {
+            "apply_email": forms.EmailInput(attrs={"placeholder": "jobs@company.com"}),
+            "email_body": forms.Textarea(attrs={"rows": 12}),
+        }
+        labels = {"apply_email": "Send to", "email_subject": "Subject", "email_body": "Email"}
 
 
 class JobNotesForm(forms.ModelForm):

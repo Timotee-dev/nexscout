@@ -75,6 +75,35 @@ class ScoutSettings(SingletonModel):
     # Tracking
     followup_days = models.PositiveSmallIntegerField(default=7)
 
+    # Autopilot
+    autopilot_enabled = models.BooleanField(
+        "Autopilot on", default=True,
+        help_text="While the autopilot window is running, NexScout fetches, scores and drafts on its own.",
+    )
+    autopilot_every_minutes = models.PositiveSmallIntegerField(
+        "Run every (minutes)", default=60,
+        help_text="How often autopilot runs a cycle. Each job board still keeps its own polite gap.",
+    )
+    autopilot_last_beat = models.DateTimeField(null=True, blank=True)
+    autopilot_last_cycle = models.DateTimeField(null=True, blank=True)
+    autopilot_last_summary = models.CharField(max_length=300, blank=True)
+
+    # Applying by email
+    send_enabled = models.BooleanField(
+        "Allow sending applications", default=True,
+        help_text="Shows Send buttons for jobs that take applications by email. Needs Gmail set up in .env.",
+    )
+    auto_send = models.BooleanField(
+        "Send automatically", default=False,
+        help_text="Autopilot sends email applications without asking, but only for jobs that pass every safety check.",
+    )
+    auto_send_min_score = models.PositiveSmallIntegerField("Auto-send only at score", default=75)
+    daily_send_cap = models.PositiveSmallIntegerField("Max applications sent per day", default=5)
+    auto_followup = models.BooleanField(
+        "Send follow-ups automatically", default=False,
+        help_text="When a follow-up is due, autopilot sends a short, polite follow-up email.",
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -221,6 +250,16 @@ class Job(models.Model):
     followed_up_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
+    # Applying by email
+    apply_email = models.EmailField(blank=True, help_text="Where the listing asks you to email your application.")
+    apply_subject = models.CharField(max_length=300, blank=True, help_text="Subject line the listing asks for, if any.")
+    email_subject = models.CharField(max_length=300, blank=True)
+    email_body = models.TextField(blank=True)
+    email_sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    email_sent_by = models.CharField(max_length=20, blank=True)  # "you" or "autopilot"
+    email_error = models.CharField(max_length=300, blank=True)
+    followup_email_sent_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -239,6 +278,10 @@ class Job(models.Model):
     @property
     def listing_url(self):
         return self.url or self.apply_url
+
+    @property
+    def applies_by_email(self):
+        return bool(self.apply_email)
 
     @property
     def has_scam_risk(self):
@@ -332,6 +375,7 @@ class ActivityLog(models.Model):
         DRAFT = "draft", "Draft"
         OUTREACH = "outreach", "Outreach"
         STATUS = "status", "Status"
+        APPLY = "apply", "Application"
         RUN = "run", "Run"
         SYSTEM = "system", "System"
         ERROR = "error", "Error"

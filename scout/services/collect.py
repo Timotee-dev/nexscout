@@ -12,6 +12,7 @@ from scout.models import Job, ScoutSettings, SourceState
 from .activity import log
 from .dedupe import company_key, find_duplicate, title_key
 from .filters import FilterConfig, below_min_score_reason, evaluate
+from .apply_email import detect as detect_apply_email
 from .scam import scam_flags
 from .sources import SourceError, get_sources
 
@@ -47,6 +48,7 @@ def ingest(raws, cfg, now=None):
                 continue
 
         flags = scam_flags(raw.company, raw.title, raw.description, raw.salary_max, raw.salary)
+        apply_to, apply_subj = detect_apply_email(raw.description_html, raw.description)
         try:
             with transaction.atomic():
                 Job.objects.create(
@@ -59,6 +61,7 @@ def ingest(raws, cfg, now=None):
                     company_key=ck[:200], title_key=title_key(raw.title)[:300],
                     passed_filter=result.passed, filter_reasons=result.reasons, scam_flags=flags,
                     status=Job.Status.NEW if result.passed else Job.Status.SKIPPED,
+                    apply_email=apply_to[:254], apply_subject=apply_subj[:300],
                 )
         except IntegrityError:
             stats["seen"] += 1
@@ -124,6 +127,11 @@ def refilter_unscored():
         Q(status=Job.Status.NEW) | Q(status=Job.Status.SKIPPED, passed_filter=False)
     )
     for job in qs.iterator():
+        if not job.apply_email:
+            found, subj = detect_apply_email(job.description_html, job.description)
+            if found:
+                job.apply_email, job.apply_subject = found[:254], subj[:300]
+                job.save(update_fields=["apply_email", "apply_subject", "updated_at"])
         result = evaluate(job, cfg)
         low = below_min_score_reason(job.score, s.min_score)
         if result.passed and low:

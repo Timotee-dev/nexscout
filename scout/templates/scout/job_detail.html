@@ -101,6 +101,64 @@
       </div>
     </section>
 
+    <section class="panel" id="apply">
+      <div class="panel-head"><h2>Apply</h2>
+        {% if job.email_sent_at %}<span class="tag ok">Sent {{ job.email_sent_at|date:"j M, H:i" }}</span>
+        {% elif job.apply_email %}<span class="tag accent">Applies by email</span>
+        {% else %}<span class="muted">Applies on the company's site</span>{% endif %}</div>
+      <div class="panel-body">
+      {% if job.email_sent_at %}
+        <p style="margin:0 0 12px">Your application went to <b>{{ job.apply_email }}</b> on {{ job.email_sent_at|date:"D j M Y, H:i" }}{% if job.email_sent_by == 'autopilot' %}, sent by autopilot{% endif %}, with your CV attached. It's also in your Gmail Sent folder.</p>
+        {% if job.followup_email_sent_at %}<p class="muted small" style="margin:0">Follow-up sent {{ job.followup_email_sent_at|date:"D j M" }}.</p>
+        {% elif job.status == 'applied' %}
+          <div class="row-actions">
+            <span class="muted small">Follow-up {% if followup_due %}is due now{% else %}due {{ job.follow_up_on|date:"D j M" }}{% endif %}.</span>
+            <form method="post" action="{% url 'scout:job_action' job.pk %}" class="inline" data-busy="Sending follow-up…" data-confirm="Send a short follow-up email to {{ job.apply_email }} now?">{% csrf_token %}
+              <input type="hidden" name="action" value="send_followup"><button class="btn sm">Send follow-up now</button></form>
+          </div>
+        {% endif %}
+        <details style="margin-top:12px"><summary class="muted small" style="cursor:pointer">What was sent</summary>
+          <p class="pv-quote" style="margin-top:8px"><b>{{ job.email_subject }}</b>
+
+{{ job.email_body }}</p></details>
+      {% elif job.apply_email %}
+        {% if not email_ready %}
+          <div class="callout warn small">{% icon "info" %}<div><b>Gmail isn't connected yet.</b> Add <code>EMAIL_HOST_USER</code> and <code>EMAIL_HOST_PASSWORD</code> (a Gmail App Password) to your <code>.env</code>, then restart NexScout. Until then, copy the email below and send it yourself.</div></div>
+        {% elif not cv_ready %}
+          <div class="callout warn small">{% icon "info" %}<div><b>Your CV isn't in place.</b> Save it as <code>cv.pdf</code> in the nexscout folder (or set <code>CV_PATH</code> in .env).</div></div>
+        {% endif %}
+        {% if job.email_error %}<div class="callout warn small">{% icon "alert" %}<div>Last send failed: {{ job.email_error }}</div></div>{% endif %}
+        {% if job.apply_subject %}<p class="muted small" style="margin:0 0 10px">The listing asks for this exact subject, so it's been used.</p>{% endif %}
+        <form method="post" action="{% url 'scout:job_save' job.pk %}">{% csrf_token %}
+          <input type="hidden" name="part" value="email">
+          {% for f in email_form %}<div class="field"><div class="field-head"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{% if f.name == 'email_body' %}<button type="button" class="btn sm" data-copy="#{{ f.id_for_label }}">{% icon "copy" %}Copy</button>{% endif %}</div>{{ f }}{% for e in f.errors %}<span class="err">{{ e }}</span>{% endfor %}</div>{% endfor %}
+          <p class="muted small" style="margin:-4px 0 12px">Your CV ({% if cv_ready %}cv.pdf{% else %}missing{% endif %}) is attached automatically.</p>
+          <div class="row-actions">
+            <button class="btn">Save email</button>
+            <button class="btn ghost" formaction="{% url 'scout:job_action' job.pk %}" name="action" value="reset_email" formnovalidate>{% icon "refresh" %}Rebuild from cover note</button>
+          </div>
+        </form>
+        {% if send_enabled %}
+        <form method="post" action="{% url 'scout:job_action' job.pk %}" style="margin-top:14px" data-busy="Sending your application…" data-confirm="Send this application to {{ job.apply_email }} now, with your CV attached? (Save any edits first.)">{% csrf_token %}
+          <input type="hidden" name="action" value="send_application">
+          <button class="btn primary" {% if not email_ready or not cv_ready or not job.email_body %}disabled{% endif %}>Send application</button>
+        </form>
+        {% endif %}
+        {% if auto_send %}
+          <p class="muted small" style="margin:12px 0 0">{% if auto_send_problems %}Autopilot won't send this one by itself: {{ auto_send_problems|join:", " }}.{% else %}Autopilot will send this one on its next cycle unless you send or skip it first.{% endif %}</p>
+        {% endif %}
+      {% else %}
+        <p style="margin:0 0 12px">This job takes applications through the company's own form. Open the listing, apply there with your cover note, then mark it <b>Applied</b>.</p>
+        <form method="post" action="{% url 'scout:job_save' job.pk %}" class="row-actions">{% csrf_token %}
+          <input type="hidden" name="part" value="email">
+          <input type="email" name="apply_email" placeholder="If the listing says “email us”, paste the address" style="flex:1;min-width:220px">
+          <input type="hidden" name="email_subject" value=""><input type="hidden" name="email_body" value="">
+          <button class="btn">Use email</button>
+        </form>
+      {% endif %}
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-head"><h2>Job description</h2></div>
       <div class="panel-body">

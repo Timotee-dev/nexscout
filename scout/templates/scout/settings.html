@@ -53,6 +53,34 @@
         </div>
       </div>
 
+      <div class="set-sec" id="autopilot">
+        <div><h2>Autopilot</h2><p class="desc-s">Runs NexScout on its own while <code>start_nexscout.bat</code> is running (or after <code>install_startup.bat</code>, every time you log in).</p>
+          <p class="desc-s">{% if autopilot_on %}<span class="tag ok">Running</span>{% else %}<span class="tag">Not running</span>{% endif %}
+          {% if autopilot_last_cycle %}<br>Last cycle {{ autopilot_last_cycle|timesince }} ago · {{ autopilot_last_summary }}{% endif %}</p></div>
+        <div>
+          <div class="field"><label class="toggle">{{ form.autopilot_enabled }}Autopilot on</label></div>
+          <div class="form-grid">{% include "scout/_field.html" with f=form.autopilot_every_minutes %}</div>
+        </div>
+      </div>
+
+      <div class="set-sec" id="applying">
+        <div><h2>Applying by email</h2><p class="desc-s">For jobs that say "email us your CV". Sent from your Gmail with your CV attached, and saved in your Sent folder.</p>
+          <p class="desc-s">
+            {% if email_ready %}<span class="tag ok">Gmail connected</span>{% else %}<span class="tag warn">Gmail not set up</span>{% endif %}
+            {% if cv_ready %}<span class="tag ok">CV found</span>{% else %}<span class="tag warn">cv.pdf missing</span>{% endif %}
+            <br>Sent today: {{ sent_today }}</p></div>
+        <div>
+          <div class="field"><label class="toggle">{{ form.send_enabled }}Allow sending applications (you press Send)</label></div>
+          <div class="field"><label class="toggle">{{ form.auto_send }}Send automatically when a job passes every safety check</label>
+            <span class="help">Checks: score at or above the number below, confirmed open to Nigeria, no scam warnings, draft written with no warnings, a company email (not Gmail/Yahoo), never the same address twice.</span></div>
+          <div class="form-grid">
+            {% include "scout/_field.html" with f=form.auto_send_min_score %}
+            {% include "scout/_field.html" with f=form.daily_send_cap %}
+          </div>
+          <div class="field"><label class="toggle">{{ form.auto_followup }}Send follow-ups automatically when they're due</label></div>
+        </div>
+      </div>
+
       <div class="save-bar"><span class="muted small">Changing filters re-checks jobs that haven't been scored yet.</span><button class="btn primary">Save settings</button></div>
     </form>
 

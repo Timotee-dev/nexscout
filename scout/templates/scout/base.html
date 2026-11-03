@@ -27,6 +27,9 @@
       <a href="{% url 'scout:settings' %}" class="{% if nav_section == 'settings' %}on{% endif %}">Settings</a>
     </nav>
     <div class="header-right">
+      <a class="pilot {% if autopilot_on and not autopilot_paused %}on{% elif autopilot_on %}paused{% endif %}" href="{% url 'scout:settings' %}#autopilot"
+         title="{% if autopilot_on %}{% if autopilot_last_cycle %}Last cycle {{ autopilot_last_cycle|timesince }} ago: {{ autopilot_last_summary }}{% else %}Starting first cycle{% endif %}{% else %}Not running. Double-click scripts\start_nexscout.bat{% endif %}">
+        <span class="pilot-dot"></span>{% if autopilot_on and not autopilot_paused %}Autopilot on{% elif autopilot_on %}Autopilot paused{% else %}Autopilot off{% endif %}</a>
       <span class="usage-pill" title="Jobs scored by Claude today">Claude today
         <span class="track"><span style="width: {{ nav_scored|pct:nav_score_cap }}%"></span></span>
         <span class="num">{{ nav_scored }}/{{ nav_score_cap }}</span></span>

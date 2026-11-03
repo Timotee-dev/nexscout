@@ -13,9 +13,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import JobDraftForm, JobNotesForm, OutreachForm, OutreachMessageForm, ProfileForm, SettingsForm
+from .forms import JobDraftForm, JobEmailForm, JobNotesForm, OutreachForm, OutreachMessageForm, ProfileForm, SettingsForm
 from .models import ActivityLog, Job, LLMCall, OutreachTarget, Profile, ScoutSettings, SourceState
-from .services import drafting, outreach, scoring
+from .services import drafting, mailer, outreach, scoring
 from .services.activity import log
 from .services.claude_client import ClaudeError
 from .services.collect import fetch_all, refilter_unscored
@@ -78,6 +78,7 @@ def overview(request):
         "failed_calls": LLMCall.objects.filter(created_at__date=today, ok=False).count(),
         "awaiting_score": scoring.pending_jobs().count(),
         "awaiting_draft": drafting.draftable_jobs(s.score_threshold).count(),
+        "sent": mailer.sent_today(), "send_cap": s.daily_send_cap, "auto_send": s.auto_send,
     }
     top = (Job.objects.filter(score__gte=s.score_threshold, status__in=[Job.Status.NEW, Job.Status.SHORTLISTED])
            .order_by("-score", "-posted_at")[:8])
@@ -191,8 +192,14 @@ def job_detail(request, pk):
     others = [{"source": x.get("source"), "label": get_sources().get(x.get("source")).label
                if get_sources().get(x.get("source")) else x.get("source"), "url": x.get("url")}
               for x in job.also_seen_on or []]
+    if job.apply_email and not job.email_sent_at and job.cover_note:
+        mailer.prepare(job)
     return render(request, "scout/job_detail.html", {
         "job": job, "draft_form": JobDraftForm(instance=job), "notes_form": JobNotesForm(instance=job),
+        "email_form": JobEmailForm(instance=job), "email_ready": mailer.email_ready(),
+        "cv_ready": bool(mailer.cv_path()), "send_enabled": s.send_enabled,
+        "auto_send_problems": mailer.auto_send_problems(job, s) if job.apply_email and not job.email_sent_at else [],
+        "auto_send": s.auto_send, "followup_due": job.is_followup_due,
         "statuses": Job.Status.choices, "threshold": s.score_threshold, "project": project,
         "source_label": get_sources()[job.source].label if job.source in get_sources() else job.source,
         "also_seen": others, "activity": job.activity.all()[:12],
@@ -223,7 +230,8 @@ def job_status(request, pk):
 def job_save(request, pk):
     job = get_object_or_404(Job, pk=pk)
     part = request.POST.get("part")
-    form = (JobDraftForm if part == "draft" else JobNotesForm)(request.POST, instance=job)
+    form_cls = {"draft": JobDraftForm, "email": JobEmailForm}.get(part, JobNotesForm)
+    form = form_cls(request.POST, instance=job)
     if form.is_valid():
         job = form.save()
         if part == "draft":
@@ -259,6 +267,18 @@ def job_action(request, pk):
             job.save(update_fields=["followed_up_at", "follow_up_on", "updated_at"])
             log("status", f"Followed up on {job.title} @ {job.company}", job=job)
             messages.success(request, f"Logged. Next follow-up {job.follow_up_on:%a %d %b}.")
+        elif action == "send_application":
+            mailer.send_application(job, by="you")
+            messages.success(request, f"Application sent to {job.apply_email} with your CV. "
+                                      f"Marked Applied; follow-up on {job.follow_up_on:%a %d %b}.")
+        elif action == "send_followup":
+            mailer.send_followup(job, by="you")
+            messages.success(request, f"Follow-up sent to {job.apply_email}.")
+        elif action == "reset_email":
+            job.email_subject, job.email_body = "", ""
+            job.save(update_fields=["email_subject", "email_body", "updated_at"])
+            mailer.prepare(job)
+            messages.success(request, "Email rebuilt from your cover note.")
         elif action == "restore":
             job.passed_filter = True
             job.filter_reasons = []
@@ -412,6 +432,7 @@ def settings_view(request):
     return render(request, "scout/settings.html", {
         "form": form, "pform": pform, "sources": sources, "profile": profile,
         "env_model": settings.LLM_MODEL, "cli": settings.CLAUDE_CLI,
+        "email_ready": mailer.email_ready(), "cv_ready": bool(mailer.cv_path()), "sent_today": mailer.sent_today(),
         "cv_preview_differs": profile.prompt_profile.strip() != build_prompt_profile().strip(),
     })
 

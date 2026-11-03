@@ -173,7 +173,34 @@ the scoring and draft parsers, the Claude CLI wrapper (API key stripping, limit 
 
 ---
 
-## Schedule it with Windows Task Scheduler
+## Autopilot: let NexScout run on its own
+
+Double-click **`scripts\start_nexscout.bat`**. It starts two small minimised windows (autopilot and the dashboard)
+and opens http://127.0.0.1:8001. Autopilot runs a full cycle every 60 minutes (change it in Settings → Autopilot);
+each job board keeps its own polite gap and Claude keeps to your daily caps.
+
+To have it start by itself every time you log in, run **`scripts\install_startup.bat`** once
+(undo with `remove_startup.bat`). Stop it with `stop_nexscout.bat`. The header shows **Autopilot on/off**.
+Logs: `logs\autopilot.log`, `logs\dashboard.log`.
+
+## Applying by email
+
+Some listings say "email your CV to jobs@company.com". NexScout spots the address (and any required subject line),
+builds the email from your cover note, attaches your CV and sends it from your Gmail.
+
+1. Put your CV in the project folder as `cv.pdf`.
+2. Turn on 2-Step Verification for your Google account, then create an **App Password**
+   (Google Account → Security → App passwords). Put it in `.env`:
+   `EMAIL_HOST_USER=you@gmail.com` and `EMAIL_HOST_PASSWORD=xxxx xxxx xxxx xxxx`.
+3. Restart NexScout. Settings → Applying by email should show **Gmail connected** and **CV found**.
+
+On a job page, the **Apply** panel lets you edit the email and press **Send application**. The job is marked Applied
+and a follow-up is set. Optional: **Send automatically** (Settings) lets autopilot send on its own, only for jobs with a
+high score, confirmed open to Nigeria, no scam warnings, a clean draft and a company email address, never twice to the
+same address, and never more than your daily limit. Jobs that use a company application form (Greenhouse, Lever, etc.)
+still need you to apply on their site.
+
+## Schedule it with Windows Task Scheduler (alternative to autopilot)
 
 Claude Code uses your logged-in session, so the task must run **only while you're logged on**.
 
@@ -242,4 +269,3 @@ Only add boards with an official API or feed whose terms allow automated access.
   missing company names, unrealistic pay and personal-email applications are flagged, never auto-deleted.
 - Your CV lives in `scout/services/profile_seed.py`. When you ship something new, update it there and run
   `python manage.py seed_profile --force` (or edit the profile text in Settings).
-"# nexscout" 

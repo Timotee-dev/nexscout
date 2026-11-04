@@ -21,6 +21,8 @@
     <nav class="tabs" aria-label="Main">
       <a href="{% url 'scout:overview' %}" class="{% if nav_section == 'overview' %}on{% endif %}">Overview</a>
       <a href="{% url 'scout:jobs' %}" class="{% if nav_section == 'jobs' or nav_section == 'job_detail' %}on{% endif %}">Jobs{% if nav_new %}<span class="count">{{ nav_new }}</span>{% endif %}</a>
+      <a href="{% url 'scout:swipe' %}" class="{% if nav_section == 'swipe' %}on{% endif %}">Swipe{% if nav_deck %}<span class="count">{{ nav_deck }}</span>{% endif %}</a>
+      <a href="{% url 'scout:apply_queue' %}" class="{% if nav_section == 'apply_queue' %}on{% endif %}">Apply{% if nav_queue %}<span class="count alert">{{ nav_queue }}</span>{% endif %}</a>
       <a href="{% url 'scout:pipeline' %}" class="{% if nav_section == 'pipeline' %}on{% endif %}">Pipeline{% if nav_due %}<span class="count alert" title="Follow-ups due">{{ nav_due }}</span>{% endif %}</a>
       <a href="{% url 'scout:outreach' %}" class="{% if 'outreach' in nav_section %}on{% endif %}">Outreach{% if nav_outreach %}<span class="count">{{ nav_outreach }}</span>{% endif %}</a>
       <a href="{% url 'scout:activity' %}" class="{% if nav_section == 'activity' %}on{% endif %}">Activity</a>

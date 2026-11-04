@@ -21,6 +21,8 @@
             <div class="toggles">
               {% for f in form %}{% if f.name|slice:":7" == "source_" %}<label class="toggle">{{ f }}{{ f.label }}</label>{% endif %}{% endfor %}
             </div></div>
+          {% include "scout/_field.html" with f=form.career_companies %}
+          <div class="field"><label class="toggle">{{ form.discover_companies }}Add companies automatically when jobs link to their Greenhouse, Lever or Ashby page</label></div>
         </div>
       </div>
 
@@ -70,6 +72,7 @@
             {% if cv_ready %}<span class="tag ok">CV found</span>{% else %}<span class="tag warn">cv.pdf missing</span>{% endif %}
             <br>Sent today: {{ sent_today }}</p></div>
         <div>
+          <div class="field"><label class="toggle">{{ form.tailored_cv }}Build a tailored CV for each job (facts from your CV only)</label></div>
           <div class="field"><label class="toggle">{{ form.send_enabled }}Allow sending applications (you press Send)</label></div>
           <div class="field"><label class="toggle">{{ form.auto_send }}Send automatically when a job passes every safety check</label>
             <span class="help">Checks: score at or above the number below, confirmed open to Nigeria, no scam warnings, draft written with no warnings, a company email (not Gmail/Yahoo), never the same address twice.</span></div>

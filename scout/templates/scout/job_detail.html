@@ -107,6 +107,7 @@
         {% elif job.apply_email %}<span class="tag accent">Applies by email</span>
         {% else %}<span class="muted">Applies on the company's site</span>{% endif %}</div>
       <div class="panel-body">
+      {% if job.cover_note or job.cv_file %}<p class="muted small" style="margin:0 0 12px">Tailored CV: <a class="link" href="{% url 'scout:job_cv' job.pk %}" target="_blank">{% if job.cv_file %}download PDF{% else %}build & download{% endif %}</a>{% if job.cv_file %} · <a class="link" href="{% url 'scout:job_cv' job.pk %}?rebuild=1" target="_blank">rebuild</a>{% endif %}</p>{% endif %}
       {% if job.email_sent_at %}
         <p style="margin:0 0 12px">Your application went to <b>{{ job.apply_email }}</b> on {{ job.email_sent_at|date:"D j M Y, H:i" }}{% if job.email_sent_by == 'autopilot' %}, sent by autopilot{% endif %}, with your CV attached. It's also in your Gmail Sent folder.</p>
         {% if job.followup_email_sent_at %}<p class="muted small" style="margin:0">Follow-up sent {{ job.followup_email_sent_at|date:"D j M" }}.</p>
@@ -148,7 +149,17 @@
           <p class="muted small" style="margin:12px 0 0">{% if auto_send_problems %}Autopilot won't send this one by itself: {{ auto_send_problems|join:", " }}.{% else %}Autopilot will send this one on its next cycle unless you send or skip it first.{% endif %}</p>
         {% endif %}
       {% else %}
-        <p style="margin:0 0 12px">This job takes applications through the company's own form. Open the listing, apply there with your cover note, then mark it <b>Applied</b>.</p>
+        <p style="margin:0 0 12px">This job takes applications through the company's own form{% if job.ats %} ({{ job.ats|capfirst }}){% endif %}. NexScout can open it in your browser, fill your details, upload your tailored CV and draft answers, then stop so you can check everything and click <b>Submit</b> yourself.</p>
+        <div class="row-actions" style="margin-bottom:14px">
+          {% if job.apply_queue == 'form' or job.apply_queue == 'filled' %}
+            <a class="btn primary" href="{% url 'scout:apply_queue' %}">In your autofill queue</a>
+          {% else %}
+            <form method="post" action="{% url 'scout:apply_queue_action' job.pk %}" class="inline" data-busy="Preparing your application…">{% csrf_token %}
+              <input type="hidden" name="action" value="queue"><input type="hidden" name="next" value="{{ request.path }}#apply">
+              <button class="btn primary">Add to autofill queue</button></form>
+          {% endif %}
+          <a class="btn" href="{{ job.listing_url }}" target="_blank" rel="noopener noreferrer">{% icon "external" %}Apply manually</a>
+        </div>
         <form method="post" action="{% url 'scout:job_save' job.pk %}" class="row-actions">{% csrf_token %}
           <input type="hidden" name="part" value="email">
           <input type="email" name="apply_email" placeholder="If the listing says “email us”, paste the address" style="flex:1;min-width:220px">

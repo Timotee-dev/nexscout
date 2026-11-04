@@ -99,12 +99,27 @@ def compose_followup(job, profile=None):
 
 # ------------------------------------------------------------------ sending
 
-def _send(to, subject, body, attach_cv=True):
+def _send(to, subject, body, attachment=None, filename=None):
     msg = EmailMessage(subject=subject, body=body, from_email=settings.DEFAULT_FROM_EMAIL, to=[to],
                        reply_to=[settings.EMAIL_HOST_USER] if settings.EMAIL_HOST_USER else None)
-    if attach_cv:
-        msg.attach_file(str(cv_path()), mimetype="application/pdf")
+    if attachment:
+        msg.attach(filename or Path(attachment).name, Path(attachment).read_bytes(), "application/pdf")
     msg.send(fail_silently=False)
+
+
+def attachment_for(job):
+    """(path, filename) of the CV to attach: the job's tailored CV if possible, else cv.pdf."""
+    from .cv_builder import build_cv, cv_filename, cv_for
+    s = ScoutSettings.get_solo()
+    if s.tailored_cv and not (job.cv_file and Path(job.cv_file).is_file()):
+        try:
+            build_cv(job)
+        except Exception as exc:
+            log("error", f"Tailored CV failed for {job.title}, using cv.pdf instead: {exc}", job=job)
+    path = cv_for(job)
+    if not path:
+        return None, None
+    return path, cv_filename(job)
 
 
 def _base_checks(job):
@@ -121,15 +136,16 @@ def send_application(job, by="you"):
     s = ScoutSettings.get_solo()
     if job.email_sent_at:
         raise SendBlocked(f"Already sent on {timezone.localtime(job.email_sent_at):%d %b %H:%M}.")
-    if not cv_path():
-        raise SendBlocked(f"Your CV wasn't found at {settings.CV_PATH}. Put cv.pdf in the project folder.")
     if sent_today() >= s.daily_send_cap:
         raise SendBlocked(f"Daily limit of {s.daily_send_cap} applications reached. Change it in Settings.")
     prepare(job)
     if not job.email_body.strip():
         raise SendBlocked("The email is empty. Draft a cover note first.")
+    cv_file, cv_name = attachment_for(job)
+    if not cv_file:
+        raise SendBlocked(f"No CV to attach. Put cv.pdf in the project folder (or turn on tailored CVs).")
     try:
-        _send(job.apply_email, job.email_subject, job.email_body)
+        _send(job.apply_email, job.email_subject, job.email_body, cv_file, cv_name)
     except Exception as exc:  # SMTP/auth/network
         job.email_error = f"{exc.__class__.__name__}: {exc}"[:300]
         job.save(update_fields=["email_error", "updated_at"])
@@ -155,7 +171,7 @@ def send_followup(job, by="you"):
         raise SendBlocked("Follow-ups are only for jobs still marked Applied.")
     subject, body = compose_followup(job)
     try:
-        _send(job.apply_email, subject, body, attach_cv=False)
+        _send(job.apply_email, subject, body)
     except Exception as exc:
         job.email_error = f"{exc.__class__.__name__}: {exc}"[:300]
         job.save(update_fields=["email_error", "updated_at"])
@@ -206,7 +222,7 @@ def auto_send_pending():
     stats = {"sent": 0, "followups": 0, "blocked": 0}
     if not (s.send_enabled and email_ready()):
         return stats
-    if s.auto_send and cv_path():
+    if s.auto_send:
         qs = (Job.objects.filter(~Q(apply_email=""), email_sent_at__isnull=True,
                                  status__in=[Job.Status.NEW, Job.Status.SHORTLISTED],
                                  score__gte=s.auto_send_min_score)

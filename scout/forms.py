@@ -11,6 +11,7 @@ class SettingsForm(forms.ModelForm):
             "keywords": forms.Textarea(attrs={"rows": 2}),
             "allowed_locations": forms.Textarea(attrs={"rows": 2}),
             "excluded_titles": forms.Textarea(attrs={"rows": 3}),
+            "career_companies": forms.Textarea(attrs={"rows": 6, "spellcheck": "false"}),
         }
 
     def clean_score_batch_size(self):

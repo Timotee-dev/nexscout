@@ -89,3 +89,85 @@
   const search = document.querySelector(".filters input[type=search]");
   if (search && search.value) { search.focus(); const v = search.value; search.value = ""; search.value = v; }
 })();
+
+// ------------------------------------------------------------ Swipe deck
+(function () {
+  "use strict";
+  const deck = document.getElementById("deck");
+  if (!deck) return;
+  const csrf = deck.dataset.csrf;
+  const toast = document.getElementById("swipe-toast");
+  const controls = document.querySelector(".swipe-controls");
+  let busy = false, toastTimer;
+
+  const cards = () => Array.from(deck.querySelectorAll(".scard:not(.gone)"));
+  const top = () => cards()[0];
+  const restack = () => cards().forEach((c, i) => c.style.setProperty("--i", i));
+
+  function say(msg, bad) {
+    toast.textContent = msg; toast.classList.toggle("bad", !!bad); toast.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 4200);
+  }
+
+  function fly(card, decision) {
+    const dx = decision === "apply" ? 1 : decision === "skip" ? -1 : 0;
+    const dy = decision === "save" ? -1 : 0;
+    card.style.transition = "transform .35s ease-in, opacity .35s";
+    card.style.transform = `translate(${dx * 140}%, ${dy * 120}%) rotate(${dx * 22}deg)`;
+    card.classList.add("gone");
+    setTimeout(() => { card.remove(); restack(); if (!top()) { deck.querySelector(".deck-empty").classList.remove("hidden"); controls.hidden = true; } }, 360);
+  }
+
+  async function decide(decision) {
+    const card = top();
+    if (!card || busy) return;
+    if (decision === "apply" && card.dataset.scam && !confirm("This listing has scam warnings. Apply anyway?")) {
+      card.style.transform = ""; return;
+    }
+    busy = true;
+    fly(card, decision);
+    const body = new FormData(); body.append("decision", decision); body.append("csrfmiddlewaretoken", csrf);
+    try {
+      const res = await fetch(card.dataset.url, { method: "POST", body, headers: { "X-Requested-With": "fetch" } });
+      const data = await res.json();
+      say(data.message || "Done", !data.ok);
+    } catch { say("Couldn't save that decision. Check NexScout is running.", true); }
+    finally { busy = false; }
+  }
+
+  // Drag / swipe gestures
+  let start = null;
+  deck.addEventListener("pointerdown", (e) => {
+    const card = top();
+    if (!card || !card.contains(e.target) || e.target.closest("a, button")) return;
+    start = { x: e.clientX, y: e.clientY, card };
+    card.classList.add("dragging"); card.setPointerCapture(e.pointerId);
+  });
+  deck.addEventListener("pointermove", (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    start.card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+    const s = (sel, v) => (start.card.querySelector(sel).style.opacity = Math.max(0, Math.min(1, v)));
+    s(".stamp-apply", dx / 110); s(".stamp-skip", -dx / 110); s(".stamp-save", -dy / 110 - Math.abs(dx) / 200);
+  });
+  const end = (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y, card = start.card;
+    card.classList.remove("dragging"); start = null;
+    card.querySelectorAll(".stamp").forEach((st) => (st.style.opacity = 0));
+    if (dx > 120) decide("apply");
+    else if (dx < -120) decide("skip");
+    else if (dy < -120) decide("save");
+    else card.style.transform = "";
+  };
+  deck.addEventListener("pointerup", end);
+  deck.addEventListener("pointercancel", end);
+
+  document.querySelectorAll(".sbtn[data-decision]").forEach((b) => b.addEventListener("click", () => decide(b.dataset.decision)));
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea, select")) return;
+    if (e.key === "ArrowRight") decide("apply");
+    else if (e.key === "ArrowLeft") decide("skip");
+    else if (e.key === "ArrowUp") { e.preventDefault(); decide("save"); }
+  });
+})();

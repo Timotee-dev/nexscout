@@ -59,7 +59,8 @@ class SendTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         m = mail.outbox[0]
         self.assertEqual(m.to, ["jobs1@acme.io"])
-        self.assertEqual(m.attachments[0][0], "cv.pdf")
+        self.assertEqual(m.attachments[0][0], "Timothy-Arifalo-CV-acme.pdf")   # tailored CV
+        self.assertTrue(m.attachments[0][1].startswith(b"%PDF"))
         self.assertIn("Hi Acme team,", m.body)
         self.assertIn("Nexivo", m.body)
         j.refresh_from_db()
@@ -85,6 +86,9 @@ class SendTests(TestCase):
         self.assertEqual(j.email_subject, "[Backend @ Acme]")
 
     def test_missing_cv_blocks(self):
+        s = ScoutSettings.get_solo()
+        s.tailored_cv = False
+        s.save()
         self.cv.unlink()
         with self.assertRaises(mailer.SendBlocked):
             mailer.send_application(self.job())

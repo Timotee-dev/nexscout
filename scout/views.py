@@ -1,3 +1,4 @@
+from pathlib import Path
 from datetime import timedelta
 from functools import wraps
 
@@ -451,3 +452,136 @@ def activity(request):
     return render(request, "scout/activity.html", {
         "page": page, "kind": kind, "kinds": ActivityLog.Kind.choices, "calls": calls, "by_day": list(by_day),
     })
+
+
+# ------------------------------------------------------------------ swipe & apply
+
+def _deck_queryset():
+    s = ScoutSettings.get_solo()
+    return (Job.objects.filter(status=Job.Status.NEW, passed_filter=True, scored_at__isnull=False,
+                               score__gte=s.min_score or 0)
+            .exclude(open_to_nigeria=Job.NigeriaFit.NO)
+            .order_by(F("score").desc(nulls_last=True), F("posted_at").desc(nulls_last=True)))
+
+
+def _queue_counts():
+    return {
+        "form": Job.objects.filter(apply_queue=Job.ApplyQueue.FORM).count(),
+        "filled": Job.objects.filter(apply_queue=Job.ApplyQueue.FILLED).count(),
+        "review": Job.objects.filter(apply_queue=Job.ApplyQueue.REVIEW).count(),
+        "queued": Job.objects.filter(apply_queue=Job.ApplyQueue.QUEUED).count(),
+    }
+
+
+@owner_only
+def swipe(request):
+    s = ScoutSettings.get_solo()
+    deck = list(_deck_queryset()[:30])
+    return render(request, "scout/swipe.html", {
+        "deck": deck, "threshold": s.score_threshold, "queue": _queue_counts(),
+        "email_ready": mailer.email_ready(), "sent_today": mailer.sent_today(), "send_cap": s.daily_send_cap,
+        "autofill_ok": autofill_available(),
+    })
+
+
+@owner_only
+@require_POST
+def swipe_decide(request, pk):
+    from .services.applier import apply_now, process_in_background
+    job = get_object_or_404(Job, pk=pk)
+    decision = request.POST.get("decision")
+    kind, message = "ok", ""
+    if decision == "skip":
+        job.set_status(Job.Status.SKIPPED)
+        message = "Skipped."
+    elif decision == "save":
+        job.set_status(Job.Status.SHORTLISTED)
+        message = "Saved to your shortlist."
+    elif decision == "apply":
+        kind, message = apply_now(job, by="you")
+        if kind == "queued":
+            process_in_background()
+        log("status", f"Swiped right on {job.title} @ {job.company}: {kind}", job=job)
+    else:
+        return JsonResponse({"ok": False, "message": "Unknown decision."}, status=400)
+    return JsonResponse({"ok": True, "kind": kind, "message": message, "queue": _queue_counts()})
+
+
+@owner_only
+def apply_queue(request):
+    rows = (Job.objects.exclude(apply_queue="")
+            .order_by("apply_queue", "-score"))
+    return render(request, "scout/apply_queue.html", {
+        "groups": [(state, label, [j for j in rows if j.apply_queue == state])
+                   for state, label in Job.ApplyQueue.choices if state],
+        "autofill_ok": autofill_available(), "queue": _queue_counts(),
+    })
+
+
+@owner_only
+@require_POST
+def apply_queue_action(request, pk):
+    job = get_object_or_404(Job, pk=pk)
+    action = request.POST.get("action")
+    if action == "applied":
+        job.set_status(Job.Status.APPLIED)
+        job.apply_queue = ""
+        job.save(update_fields=["apply_queue", "updated_at"])
+        log("apply", f"Marked as applied after autofill: {job.title} @ {job.company}", job=job)
+        messages.success(request, f"Marked Applied. Follow-up on {job.follow_up_on:%a %d %b}.")
+    elif action == "refill":
+        job.apply_queue = Job.ApplyQueue.FORM
+        job.save(update_fields=["apply_queue", "updated_at"])
+        messages.success(request, "Back in the autofill queue.")
+    elif action == "remove":
+        job.apply_queue = ""
+        job.save(update_fields=["apply_queue", "updated_at"])
+        messages.success(request, "Removed from the queue.")
+    elif action == "queue":
+        from .services.applier import apply_now, process_in_background
+        kind, msg = apply_now(job, by="you")
+        if kind == "queued":
+            process_in_background()
+        messages.success(request, msg)
+        return _back(request, job.get_absolute_url())
+    return _back(request, reverse("scout:apply_queue"))
+
+
+def autofill_available():
+    try:
+        import playwright  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@owner_only
+@require_POST
+def autofill_start(request):
+    import subprocess
+    import sys
+    if not autofill_available():
+        messages.error(request, "Autofill needs Playwright: run  pip install playwright  then restart NexScout.")
+        return _back(request, reverse("scout:apply_queue"))
+    ids = request.POST.getlist("job")
+    cmd = [sys.executable, str(settings.BASE_DIR / "manage.py"), "autofill"] + (ids or ["--queue"])
+    kwargs = {"cwd": str(settings.BASE_DIR)}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+    subprocess.Popen(cmd, **kwargs)
+    messages.success(request, "Opening the browser… Check each filled form, then click Submit yourself.")
+    return _back(request, reverse("scout:apply_queue"))
+
+
+@owner_only
+def job_cv(request, pk):
+    from django.http import FileResponse, Http404
+    from .services.cv_builder import build_cv, cv_filename
+    job = get_object_or_404(Job, pk=pk)
+    try:
+        path = build_cv(job) if request.GET.get("rebuild") or not job.cv_file else Path(job.cv_file)
+        if not path.is_file():
+            path = build_cv(job)
+    except Exception as exc:
+        raise Http404(f"Couldn't build the CV: {exc}")
+    return FileResponse(open(path, "rb"), content_type="application/pdf", filename=cv_filename(job))

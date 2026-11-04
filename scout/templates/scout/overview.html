@@ -9,6 +9,7 @@
     <p class="sub">{% if usage.awaiting_draft %}{{ usage.awaiting_draft }} strong match{{ usage.awaiting_draft|pluralize:"es" }} waiting for a draft.{% elif stats.followups_due %}{{ stats.followups_due }} follow-up{{ stats.followups_due|pluralize }} due today.{% else %}Here's where your job search stands.{% endif %}</p>
   </div>
   <div class="actions">
+    <a class="btn" href="{% url 'scout:swipe' %}">Swipe{% if nav_deck %} · {{ nav_deck }}{% endif %}</a>
     <form method="post" action="{% url 'scout:run' %}" data-busy="Fetching new jobs from the boards…">{% csrf_token %}
       <input type="hidden" name="action" value="fetch"><button class="btn">{% icon "download" %}Fetch jobs</button></form>
     <form method="post" action="{% url 'scout:run' %}" data-busy="Claude is scoring 5 jobs…">{% csrf_token %}

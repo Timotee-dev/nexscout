@@ -16,6 +16,7 @@ from scout.models import ScoutSettings
 from .activity import log
 from .collect import fetch_all
 from .drafting import draft_pending
+from .applier import process_queued
 from .mailer import auto_send_pending
 from .scoring import score_pending
 
@@ -64,6 +65,11 @@ def run_cycle(minutes=30, no_ai=False, force_fetch=False, score_limit=None, draf
             summary["drafted"] = dr["drafted"]
             out(f"Draft: {dr['drafted']} drafted, {dr['failed']} failed, {dr['calls']} Claude calls"
                 + (f" ({dr['stopped']})" if dr["stopped"] else ""))
+        if not no_ai and time.monotonic() < deadline:
+            q = process_queued()
+            if q["drafted"]:
+                out(f"Apply queue: {q['drafted']} drafted, {q.get('sent', 0)} sent, "
+                    f"{q.get('form', 0)} ready to autofill, {q.get('review', 0)} need review")
         if send:
             st = auto_send_pending()
             summary["sent"], summary["followups"] = st["sent"], st["followups"]

@@ -6,14 +6,15 @@ from .models import ActivityLog, Job, LLMCall, OutreachTarget, Profile, ScoutSet
 @admin.register(ScoutSettings)
 class ScoutSettingsAdmin(admin.ModelAdmin):
     fieldsets = (
-        ("Collect", {"fields": ("keywords", "source_remoteok", "source_remotive", "source_wwr", "source_jobicy", "source_himalayas", "source_hn")}),
+        ("Collect", {"fields": ("keywords", "source_remoteok", "source_remotive", "source_wwr", "source_jobicy", "source_himalayas", "source_hn",
+                                "source_careers", "career_companies", "discover_companies")}),
         ("Filter", {"fields": ("allowed_locations", "excluded_titles", "block_senior_titles", "max_years_required", "max_age_days")}),
         ("Claude", {"fields": ("llm_model", "min_score", "score_threshold", "daily_score_cap", "daily_draft_cap",
                                "daily_outreach_cap", "score_batch_size", "draft_batch_size")}),
         ("Tracking", {"fields": ("followup_days",)}),
         ("Autopilot", {"fields": ("autopilot_enabled", "autopilot_every_minutes", "autopilot_last_beat",
                                   "autopilot_last_cycle", "autopilot_last_summary")}),
-        ("Applying by email", {"fields": ("send_enabled", "auto_send", "auto_send_min_score", "daily_send_cap",
+        ("Applying by email", {"fields": ("tailored_cv", "send_enabled", "auto_send", "auto_send_min_score", "daily_send_cap",
                                           "auto_followup")}),
     )
 
@@ -44,6 +45,8 @@ class JobAdmin(admin.ModelAdmin):
         ("Claude score", {"fields": ("score", "score_reason", "matched_skills", "missing_skills",
                                      "seniority_guess", "open_to_nigeria", "ai_red_flags", "scored_at", "score_error")}),
         ("Draft", {"fields": ("chosen_project", "cover_note", "opener", "draft_warnings", "drafted_at")}),
+        ("Applying", {"fields": ("ats", "apply_queue", "queued_at", "autofilled_at", "cv_summary",
+                                 "cv_project_order", "cv_file", "cv_built_at")}),
         ("Email application", {"fields": ("apply_email", "apply_subject", "email_subject", "email_body",
                                           "email_sent_at", "email_sent_by", "email_error", "followup_email_sent_at")}),
         ("Tracking", {"fields": ("status", "status_changed_at", "applied_at", "follow_up_on",

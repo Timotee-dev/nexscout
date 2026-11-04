@@ -200,6 +200,27 @@ high score, confirmed open to Nigeria, no scam warnings, a clean draft and a com
 same address, and never more than your daily limit. Jobs that use a company application form (Greenhouse, Lever, etc.)
 still need you to apply on their site.
 
+## Swipe, tailored CVs and autofill
+
+- **Swipe** (top menu): your scored matches as cards, best first. Right = apply, left = skip, up = save.
+  Works with drag, the buttons, or the arrow keys.
+- **Apply** on an email job: drafts the cover note if needed, builds a tailored CV and sends it from your Gmail.
+  A draft with warnings is held in **Apply → Needs your review** instead.
+- **Apply** on a form job (Greenhouse, Lever, Ashby, Workable, ...): goes to **Apply → Ready to autofill**.
+  Press **Autofill**: a browser window (your Chrome, or Edge) opens each form, uploads your tailored CV,
+  fills your details and drafts answers to the form's own questions from your profile. Work authorisation,
+  visa, salary, demographic and consent questions are left for you (amber). **NexScout never clicks Submit.**
+  When you submit, it notices and marks the job Applied; close the tab to move to the next.
+- **Tailored CV**: one page, built per job from your CV facts only. The most relevant projects and skills
+  come first, and the summary is rewritten for the role but checked (no new numbers, no clichés).
+  Download it from any job page. Files are kept in `cvs/` (not pushed to GitHub).
+- **Company career sites**: Settings → Search lists companies to watch as `greenhouse:gitlab`,
+  `lever:company`, `ashby:posthog`, one per line. With "Add companies automatically" on, any company whose
+  job links to one of those systems is added for you, so the list grows with your search.
+
+Autofill uses Playwright (installed by `pip install -r requirements.txt`). It drives your installed Chrome or
+Edge; only if neither works, run `.venv\Scripts\playwright install chromium` once.
+
 ## Schedule it with Windows Task Scheduler (alternative to autopilot)
 
 Claude Code uses your logged-in session, so the task must run **only while you're logged on**.

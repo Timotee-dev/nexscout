@@ -14,6 +14,22 @@ def default_excluded_titles():
     return ", ".join(DEFAULT_EXCLUDED_TITLES)
 
 
+DEFAULT_CAREER_COMPANIES = """greenhouse:gitlab
+greenhouse:canonical
+greenhouse:mozilla
+greenhouse:wikimedia
+greenhouse:grafanalabs
+greenhouse:elastic
+ashby:posthog
+ashby:supabase
+ashby:linear
+ashby:railway"""
+
+
+def default_career_companies():
+    return DEFAULT_CAREER_COMPANIES
+
+
 def default_locations():
     return "Worldwide, Anywhere, Global, Africa, EMEA, Nigeria, Lagos, West Africa"
 
@@ -46,6 +62,15 @@ class ScoutSettings(SingletonModel):
     source_jobicy = models.BooleanField("Jobicy", default=True)
     source_himalayas = models.BooleanField("Himalayas", default=True)
     source_hn = models.BooleanField("HN Who is hiring", default=True)
+    source_careers = models.BooleanField("Company career sites", default=True)
+    career_companies = models.TextField(
+        default=default_career_companies, blank=True,
+        help_text="One per line as ats:company, e.g. greenhouse:gitlab, lever:acme, ashby:posthog.",
+    )
+    discover_companies = models.BooleanField(
+        "Add companies automatically", default=True,
+        help_text="When a job from another board links to a Greenhouse, Lever or Ashby page, watch that company too.",
+    )
 
     # Filter
     allowed_locations = models.TextField(default=default_locations, help_text="Comma-separated locations that count as open to you.")
@@ -99,6 +124,10 @@ class ScoutSettings(SingletonModel):
     )
     auto_send_min_score = models.PositiveSmallIntegerField("Auto-send only at score", default=75)
     daily_send_cap = models.PositiveSmallIntegerField("Max applications sent per day", default=5)
+    tailored_cv = models.BooleanField(
+        "Tailored CV for each job", default=True,
+        help_text="Builds a PDF CV for each job that leads with the most relevant projects and skills (facts from your CV only).",
+    )
     auto_followup = models.BooleanField(
         "Send follow-ups automatically", default=False,
         help_text="When a follow-up is due, autopilot sends a short, polite follow-up email.",
@@ -120,6 +149,24 @@ class ScoutSettings(SingletonModel):
     @property
     def excluded_title_list(self):
         return [k.strip() for k in self.excluded_titles.split(",") if k.strip()]
+
+    @property
+    def career_company_list(self):
+        out = []
+        for line in (self.career_companies or "").replace(",", "\n").splitlines():
+            ats, _, slug = line.strip().partition(":")
+            ats, slug = ats.strip().lower(), slug.strip()
+            if ats in ("greenhouse", "lever", "ashby") and slug and (ats, slug) not in out:
+                out.append((ats, slug))
+        return out
+
+    def add_career_company(self, ats, slug, save=True):
+        if (ats, slug) in self.career_company_list or len(self.career_company_list) >= 300:
+            return False
+        self.career_companies = (self.career_companies.rstrip() + f"\n{ats}:{slug}").strip()
+        if save:
+            self.save(update_fields=["career_companies", "updated_at"])
+        return True
 
     @property
     def location_list(self):
@@ -259,6 +306,23 @@ class Job(models.Model):
     email_sent_by = models.CharField(max_length=20, blank=True)  # "you" or "autopilot"
     email_error = models.CharField(max_length=300, blank=True)
     followup_email_sent_at = models.DateTimeField(null=True, blank=True)
+
+    # Applying: queue, ATS and tailored CV
+    class ApplyQueue(models.TextChoices):
+        NONE = "", "-"
+        QUEUED = "queued", "Queued: waiting for draft"
+        REVIEW = "review", "Needs your review"
+        FORM = "form", "Ready to autofill"
+        FILLED = "filled", "Form filled, waiting for you"
+
+    ats = models.CharField(max_length=20, blank=True, help_text="greenhouse / lever / ashby / workable / other")
+    apply_queue = models.CharField(max_length=10, choices=ApplyQueue.choices, blank=True, db_index=True)
+    queued_at = models.DateTimeField(null=True, blank=True)
+    autofilled_at = models.DateTimeField(null=True, blank=True)
+    cv_summary = models.TextField(blank=True, help_text="Summary used on this job's tailored CV.")
+    cv_project_order = models.JSONField(default=list, blank=True)
+    cv_file = models.CharField(max_length=500, blank=True)
+    cv_built_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

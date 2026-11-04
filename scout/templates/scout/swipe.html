@@ -1,0 +1,60 @@
+{% extends "scout/base.html" %}{% load scout_tags %}
+{% block title %}Swipe{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Swipe</h1><p class="sub">Right to apply, left to skip, up to save for later. Your best matches come first.</p></div>
+  <div class="actions">
+    <a class="btn" href="{% url 'scout:apply_queue' %}">Apply queue{% if queue.form or queue.review %} · {{ queue.form|add:queue.review }}{% endif %}</a>
+  </div>
+</header>
+
+<div class="swipe-wrap">
+  <div class="deck" id="deck" data-csrf="{{ csrf_token }}">
+    {% for j in deck %}
+    <article class="scard" data-id="{{ j.pk }}" data-url="{% url 'scout:swipe_decide' j.pk %}"
+             data-scam="{% if j.has_scam_risk %}1{% endif %}" style="--i: {{ forloop.counter0 }}">
+      <div class="scard-top">
+        <span class="ring xl {{ j.score|score_band:threshold }}" style="--v: {{ j.score }}"><b>{{ j.score }}</b></span>
+        <div class="scard-head">
+          <h2>{{ j.title }}</h2>
+          <p class="co">{{ j.company|default:"Unknown company" }}</p>
+          <div class="chips" style="margin-top:8px">
+            {% if j.apply_email %}<span class="tag accent">Applies by email</span>{% elif j.ats %}<span class="tag">{{ j.ats|capfirst }} form</span>{% else %}<span class="tag">Company form</span>{% endif %}
+            {% if j.open_to_nigeria == 'yes' %}<span class="tag ok">Open to Nigeria</span>{% endif %}
+            {% if j.has_scam_risk %}<span class="tag warn">Scam warning</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <dl class="pv-facts">
+        <div><dt>Location</dt><dd title="{{ j.location }}">{{ j.location|default:"Remote" }}</dd></div>
+        <div><dt>Salary</dt><dd title="{{ j.salary }}">{{ j.salary|default:"Not listed" }}</dd></div>
+        <div><dt>Posted</dt><dd>{% if j.posted_at %}{{ j.posted_at|ago }} ago{% else %}—{% endif %}</dd></div>
+        <div><dt>Source</dt><dd>{{ j.source|source_label }}</dd></div>
+      </dl>
+      <div class="scard-body">
+        <p class="reason">{{ j.score_reason }}</p>
+        {% if j.matched_skills %}<p class="chips"><span class="lbl">You have</span>{% for s in j.matched_skills|slice:":6" %}<span class="tag ok">{{ s }}</span>{% endfor %}</p>{% endif %}
+        {% if j.missing_skills %}<p class="chips" style="margin-top:6px"><span class="lbl">Gaps</span>{% for s in j.missing_skills|slice:":6" %}<span class="tag">{{ s }}</span>{% endfor %}</p>{% endif %}
+        <p class="scard-desc">{{ j.description|truncatechars:420 }}</p>
+        <a class="link small" href="{{ j.get_absolute_url }}" target="_blank" rel="noopener">Open full job</a>
+      </div>
+      <div class="stamp stamp-apply">APPLY</div><div class="stamp stamp-skip">SKIP</div><div class="stamp stamp-save">SAVE</div>
+    </article>
+    {% endfor %}
+    <div class="deck-empty {% if deck %}hidden{% endif %}">
+      <div class="empty-ico">{% icon "inbox" %}</div>
+      <p class="t">You're all caught up</p>
+      <p class="muted">Autopilot adds new matches as it finds them.{% if queue.form %} You have {{ queue.form }} form{{ queue.form|pluralize }} ready to autofill.{% endif %}</p>
+      <a class="btn primary" href="{% url 'scout:apply_queue' %}">Open apply queue</a>
+    </div>
+  </div>
+
+  <div class="swipe-controls" {% if not deck %}hidden{% endif %}>
+    <button class="sbtn skip" data-decision="skip" title="Skip (left arrow)">✕</button>
+    <button class="sbtn save" data-decision="save" title="Save for later (up arrow)">★</button>
+    <button class="sbtn apply" data-decision="apply" title="Apply (right arrow)">✓</button>
+  </div>
+  <p class="muted small swipe-hint">Keyboard: ← skip · ↑ save · → apply. Email jobs are sent from your Gmail{% if not email_ready %} once it's set up{% endif %} ({{ sent_today }}/{{ send_cap }} today). Form jobs go to the Apply queue for autofill.</p>
+  <div class="swipe-toast" id="swipe-toast" role="status"></div>
+</div>
+{% endblock %}

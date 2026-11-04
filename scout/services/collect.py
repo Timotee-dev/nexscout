@@ -13,6 +13,7 @@ from .activity import log
 from .dedupe import company_key, find_duplicate, title_key
 from .filters import FilterConfig, below_min_score_reason, evaluate
 from .apply_email import detect as detect_apply_email
+from .ats import detect_ats
 from .scam import scam_flags
 from .sources import SourceError, get_sources
 
@@ -22,7 +23,7 @@ DEDUPE_WINDOW_DAYS = 60
 def ingest(raws, cfg, now=None):
     """Store new jobs. Returns counters. Jobs that don't match any keyword are not stored."""
     now = now or timezone.now()
-    stats = {"seen": 0, "irrelevant": 0, "duplicates": 0, "passed": 0, "rejected": 0}
+    stats = {"seen": 0, "irrelevant": 0, "duplicates": 0, "passed": 0, "rejected": 0, "discovered": []}
     for raw in raws:
         if not raw.external_id or not raw.title:
             continue
@@ -33,6 +34,11 @@ def ingest(raws, cfg, now=None):
         if not result.keyword_match:
             stats["irrelevant"] += 1
             continue
+
+        ats, ats_slug = detect_ats(raw.apply_url, raw.url)
+        if raw.source != "careers" and ats in ("greenhouse", "lever", "ashby") and ats_slug:
+            if (ats, ats_slug) not in stats["discovered"]:
+                stats["discovered"].append((ats, ats_slug))
 
         ck = company_key(raw.company)
         if ck:
@@ -61,7 +67,7 @@ def ingest(raws, cfg, now=None):
                     company_key=ck[:200], title_key=title_key(raw.title)[:300],
                     passed_filter=result.passed, filter_reasons=result.reasons, scam_flags=flags,
                     status=Job.Status.NEW if result.passed else Job.Status.SKIPPED,
-                    apply_email=apply_to[:254], apply_subject=apply_subj[:300],
+                    apply_email=apply_to[:254], apply_subject=apply_subj[:300], ats=(ats or ("email" if apply_to else ""))[:20],
                 )
         except IntegrityError:
             stats["seen"] += 1
@@ -104,11 +110,21 @@ def fetch_all(force=False, only=None, deadline=None):
             results[key] = f"error: {exc}"
             continue
         stats = ingest(raws, cfg)
+        added = 0
+        if s.discover_companies:
+            for ats, slug in stats.pop("discovered", []):
+                added += bool(s.add_career_company(ats, slug))
+            if added:
+                log("fetch", f"Now watching {added} more company career site{'s' if added != 1 else ''} found via {cls.label}")
+        else:
+            stats.pop("discovered", None)
+        problems = getattr(source, "problems", [])
         state.last_fetched_at = timezone.now()
         state.last_ok = True
         state.last_count = len(raws)
         state.last_message = (f"{len(raws)} listed · {stats['passed']} kept · {stats['rejected']} filtered · "
-                              f"{stats['duplicates']} dupes")
+                              f"{stats['duplicates']} dupes"
+                              + (f" · not found: {', '.join(problems[:4])}" if problems else ""))[:300]
         state.save()
         log("fetch", f"{cls.label}: {len(raws)} listings → {stats['passed']} kept, {stats['rejected']} filtered out, "
                      f"{stats['duplicates']} duplicates, {stats['seen']} already seen", source=key, **stats)

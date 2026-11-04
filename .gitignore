@@ -8,3 +8,5 @@ staticfiles/
 logs/*.log
 .run_scout.lock
 cv.pdf
+cvs/
+.browser/

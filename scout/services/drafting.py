@@ -57,8 +57,13 @@ HARD RULES
 JOBS
 {jobs}
 
+- cv_summary: 2-3 sentences (max 60 words) for the top of a CV tailored to this job, third-person-free and
+  plain ("Backend engineer who..."), using only facts from the profile. Lead with what this job cares about.
+- project_order: all project keys, most relevant to this job first.
+
 Return a JSON array, one object per job:
-[{{"id": "J123", "project": "nexivo", "cover_note": "...", "opener": "..."}}]
+[{{"id": "J123", "project": "nexivo", "cover_note": "...", "opener": "...",
+   "cv_summary": "...", "project_order": ["nexivo", "nexvote", "bts", "nexreach"]}}]
 """
 
 
@@ -74,6 +79,16 @@ def suggest_project(text, project_keys=None):
         return None
     best = max(scores, key=lambda k: (scores[k], k == "nexivo"))
     return best if scores[best] > 0 else "nexivo"
+
+
+def safe_cv_summary(summary, profile, job):
+    """Use Claude's tailored summary only if it passes the same truth checks as drafts."""
+    summary = (summary or "").strip()
+    if not summary or word_count(summary) > 80 or find_cliches(summary):
+        return ""
+    if unsupported_numbers(summary, profile.prompt_profile, job.title, job.description):
+        return ""
+    return summary
 
 
 def find_cliches(text):
@@ -138,6 +153,8 @@ def parse_draft_reply(text, expected_ids, project_keys):
             "cover_note": note,
             "opener": str(item.get("opener") or "").strip().splitlines()[0][:400] if item.get("opener") else "",
             "project": project if project in project_keys else "",
+            "cv_summary": str(item.get("cv_summary") or "").strip()[:600],
+            "project_order": [k for k in (item.get("project_order") or []) if k in project_keys],
         }
     if not out and items:
         raise LLMParseError("Reply had no usable drafts")
@@ -171,8 +188,16 @@ def _draft_batch(batch, profile, s):
         j.opener = d["opener"]
         j.chosen_project = d["project"] or suggest_project(j.description, keys) or ""
         j.draft_warnings = review_draft(j.cover_note, j.opener, profile.prompt_profile, j)
+        j.cv_summary = safe_cv_summary(d.get("cv_summary", ""), profile, j)
+        j.cv_project_order = d.get("project_order") or []
         j.drafted_at = timezone.now()
         j.save()
+        if ScoutSettings.get_solo().tailored_cv:
+            try:
+                from .cv_builder import build_cv
+                build_cv(j)
+            except Exception as exc:  # a CV problem must never lose the draft
+                log("error", f"Couldn't build tailored CV for {j.title}: {exc}", job=j)
         done.append(j)
         log("draft", f"Drafted note for {j.title} @ {j.company} (using {j.chosen_project})", job=j,
             warnings=j.draft_warnings)

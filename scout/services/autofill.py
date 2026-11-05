@@ -5,9 +5,11 @@ What it does, per job:
   1. Opens the application page in a real browser window on your computer (your Chrome if found).
   2. Uploads your tailored CV, then fills name, email, phone, links, location and cover letter.
   3. Drafts answers to the form's own questions with Claude, using only facts from your profile.
-  4. Leaves sensitive questions (work authorisation, visa, salary, demographics, consent) for you.
-  5. Highlights everything (green = filled, blue = drafted answer to read, amber = needs you)
-     and STOPS. It never clicks Submit. When you submit, it notices and marks the job Applied.
+  4. Sensitive questions (work authorisation, visa, salary, notice, consent, demographics) are answered only
+     from your answer sheet in Settings (demographics always "prefer not to say"); otherwise left for you.
+  5. Highlights everything (green = filled, blue = drafted answer, amber = needs you).
+     In the visible browser it STOPS for you to submit. In hands-free mode (autopilot) it submits only when
+     every required field is filled, there's no CAPTCHA, and you've confirmed your answer sheet.
 """
 import json
 import re
@@ -22,35 +24,53 @@ from .profile_seed import CV
 SCAN_JS = r"""
 () => {
   const out = [];
+  const textOf = (n) => (n && (n.innerText || n.textContent) || '').replace(/\s+/g, ' ').trim();
   const els = Array.from(document.querySelectorAll('input, textarea, select'));
   els.forEach((el, i) => {
     const type = (el.type || el.tagName).toLowerCase();
     if (['hidden','submit','button','image','reset'].includes(type)) return;
-    const rect = el.getClientRects().length;
     const st = getComputedStyle(el);
-    const visible = rect && st.visibility !== 'hidden' && st.display !== 'none';
-    if (!visible && type !== 'file') return;
-    let label = '';
-    if (el.id) { try { const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l) label = l.innerText; } catch (e) {} }
-    if (!label) { const l = el.closest('label'); if (l) label = l.innerText; }
-    if (!label && el.getAttribute('aria-labelledby')) {
-      label = el.getAttribute('aria-labelledby').split(/\s+/).map(id => (document.getElementById(id) || {}).innerText || '').join(' ');
+    const visible = el.getClientRects().length && st.visibility !== 'hidden' && st.display !== 'none';
+    if (!visible && !['file', 'radio', 'checkbox'].includes(type)) return;
+    let own = '';
+    if (el.id) { try { const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l) own = textOf(l); } catch (e) {} }
+    if (!own) { const l = el.closest('label'); if (l) own = textOf(l); }
+    if (!own && el.getAttribute('aria-labelledby')) {
+      own = el.getAttribute('aria-labelledby').split(/\s+/).map(id => textOf(document.getElementById(id))).join(' ');
     }
-    if (!label) label = el.getAttribute('aria-label') || '';
+    if (!own) own = el.getAttribute('aria-label') || '';
+    let label = own, group = '';
+    if (type === 'radio' || type === 'checkbox') {
+      // the question for a group of options
+      let c = el.parentElement;
+      for (let k = 0; k < 6 && c; k++, c = c.parentElement) {
+        const same = el.name ? c.querySelectorAll(`input[name="${CSS.escape(el.name)}"]`).length : 1;
+        const lg = c.querySelector('legend, [class*="question"], [class*="label"]:not(label), [class*="Label"]:not(label)');
+        if (c.tagName === 'FIELDSET' || same > 1 || (lg && !lg.contains(el))) {
+          const q = c.querySelector('legend') || lg;
+          if (q && !q.contains(el)) { group = textOf(q); break; }
+        }
+      }
+      if (!group) group = own;
+    }
     if (!label) {
       let c = el.parentElement;
       for (let k = 0; k < 4 && c && !label; k++, c = c.parentElement) {
         const t = c.querySelector('label, legend, [class*="label"], [class*="question"], [class*="Label"]');
-        if (t && !t.contains(el)) label = t.innerText;
+        if (t && !t.contains(el)) label = textOf(t);
       }
     }
     label = (label || el.placeholder || el.name || el.id || '').replace(/\s+/g, ' ').trim().slice(0, 300);
     el.setAttribute('data-nexscout-idx', String(i));
+    const req = !!(el.required || el.getAttribute('aria-required') === 'true' || /\*\s*$/.test(group || label));
     out.push({
-      idx: i, tag: el.tagName.toLowerCase(), type, label, name: el.name || '', id: el.id || '',
-      placeholder: el.placeholder || '',
-      required: !!(el.required || el.getAttribute('aria-required') === 'true' || /\*\s*$/.test(label)),
-      filled: (type === 'checkbox' || type === 'radio') ? el.checked : !!(el.value || '').trim(),
+      idx: i, tag: el.tagName.toLowerCase(), type, label, group: (group || '').slice(0, 300),
+      name: el.name || '', id: el.id || '', placeholder: el.placeholder || '', required: req,
+      options: el.tagName === 'SELECT' ? Array.from(el.options).map(o => o.text.trim()) : [],
+      checked: !!el.checked,
+      filled: (type === 'checkbox' || type === 'radio') ? !!el.checked
+              : (el.tagName === 'SELECT' ? !!(el.value !== '' && !/^\s*(select|choose|--|please|-)/i.test((el.options[el.selectedIndex] || {}).text || ''))
+              : !!(el.value || '').trim()),
     });
   });
   return out;
@@ -87,7 +107,10 @@ SUBMITTED_RE = re.compile(
     r"|we('ve| have) received your application|your application is (in|on its way)|successfully applied",
     re.I,
 )
-SUBMITTED_URL_RE = re.compile(r"confirm|thank|submitted|success|applied", re.I)
+SUBMITTED_URL_RE = re.compile(
+    r"/(confirmation|confirmed|thank[-_]?you|thanks|success|submitted|application[-_]?(submitted|received|complete))(\b|/|\?|$)",
+    re.I,
+)
 
 FIELD_RULES = [
     ("resume", r"resum|résumé|\bcv\b|curriculum"),
@@ -250,11 +273,83 @@ def answer_questions(job, questions, ask=None):
     return [by_n.get(i, "") for i in range(1, len(questions) + 1)]
 
 
-def fill_page(page, job, cv_path, ask=None):
-    """Fill whatever form is on the page. Returns counts. Never submits."""
+CHOICE_PROMPT = """Choose answers for multiple-choice questions on a job application form, for the candidate below.
+Do not use any tools. Reply with JSON only.
+
+CANDIDATE PROFILE (the ONLY facts you may use)
+{profile}
+
+CANDIDATE'S OWN ANSWER SHEET
+{sheet}
+
+JOB: {title} at {company}
+
+RULES
+- For each question pick EXACTLY one of the listed options, copied character for character.
+- Only pick an option the profile or answer sheet clearly supports. If unsure, return "" for that question.
+- Never guess demographic, legal, criminal, medical or identity questions: return "".
+
+QUESTIONS
+{questions}
+
+Return: {{"picks": [{{"n": 1, "option": "..."}}]}}
+"""
+
+
+def answer_choices(job, items, ask=None):
+    """items: list of (question, [options]) -> list of chosen option text ('' = leave)."""
+    if not items:
+        return []
+    from .answers import bank
+    from .claude_client import ask_claude
+    from .llm_json import as_list_of_dicts, extract_json
+    ask = ask or ask_claude
+    sheet = "\n".join(f"- {k}: {v}" for k, v in bank().items() if v)
+    qs = "\n".join(f"{i}. {q}\n   Options: " + " | ".join(o for o in opts if o) for i, (q, opts) in enumerate(items, 1))
+    reply = ask(CHOICE_PROMPT.format(profile=Profile.get_solo().prompt_profile.strip(), sheet=sheet,
+                                     title=job.title, company=job.company or "the company", questions=qs),
+                purpose="autofill", items=len(items))
+    picks = {}
+    for it in as_list_of_dicts(extract_json(reply), "picks"):
+        try:
+            picks[int(it.get("n"))] = str(it.get("option") or "").strip()
+        except (TypeError, ValueError):
+            continue
+    out = []
+    for i, (_, opts) in enumerate(items, 1):
+        choice = picks.get(i, "")
+        out.append(choice if choice in opts else "")   # must be a real option, never invented
+    return out
+
+
+def _fill(field, value):
+    _loc(field).fill(str(value))
+    _mark(field, "filled")
+
+
+def _need(field, counts, question=None):
+    _mark(field, "attention")
+    counts["attention"] += 1
+    if field.get("required"):
+        counts["missing"].append((question or field.get("group") or field.get("label") or field.get("name") or "a field")[:120])
+
+
+def fill_page(page, job, cv_path, ask=None, auto=False):
+    """
+    Fill whatever form is on the page. Returns counts:
+      filled / ai / attention (numbers), missing (required questions left empty), captcha (bool).
+    Never submits; see submit_form() for hands-free mode.
+    """
+    from scout.models import ScoutSettings
+    from . import answers as sheet
+
+    s = ScoutSettings.get_solo()
+    use_sheet = s.answers_confirmed
     values = profile_values(job, cv_path)
+    if s.ans_linkedin:
+        values["linkedin"] = s.ans_linkedin
+    counts = {"filled": 0, "ai": 0, "attention": 0, "missing": [], "captcha": False}
     fields = scan(page)
-    counts = {"filled": 0, "ai": 0, "attention": 0}
 
     # 1) CV first: some systems (Lever) parse it and overwrite fields, so text goes in after.
     for f in fields:
@@ -269,37 +364,122 @@ def fill_page(page, job, cv_path, ask=None):
             except Exception:
                 continue
 
-    # 2) Standard fields
     fields = scan(page)
-    questions = []
+    questions, choice_items, radio_groups = [], [], {}
     for f in fields:
-        key, sensitive = classify(f)
-        if f["type"] == "file":
+        t = f["type"]
+        if t == "file":
+            if f["required"] and not f["filled"]:
+                _need(f, counts)
             continue
+        if t == "radio":
+            radio_groups.setdefault((id(f["frame"]), f["name"] or f["group"]), []).append(f)
+            continue
+        if t == "checkbox":
+            q = f["label"] or f["group"]
+            if f["checked"]:
+                continue
+            if use_sheet and s.ans_consent and sheet.classify(q) == "consent":
+                try:
+                    _loc(f).check()
+                    _mark(f, "filled")
+                    counts["filled"] += 1
+                    continue
+                except Exception:
+                    pass
+            if f["required"]:
+                _need(f, counts, q)
+            continue
+        if f["tag"] == "select":
+            if f["filled"]:
+                continue
+            q = f["label"]
+            opt = sheet.choose_option(q, f["options"]) if use_sheet else None
+            if opt:
+                try:
+                    _loc(f).select_option(label=opt)
+                    _mark(f, "filled")
+                    counts["filled"] += 1
+                    continue
+                except Exception:
+                    pass
+            if use_sheet and sheet.classify(q) not in ("demographic", "never"):
+                choice_items.append(("select", f, q, f["options"]))
+            elif f["required"] or sheet.classify(q) == "demographic":
+                _need(f, counts, q)
+            continue
+
+        key, sensitive = classify(f)
         if sensitive:
-            if not f["filled"]:
-                _mark(f, "attention")
-                counts["attention"] += 1
+            if f["filled"]:
+                continue
+            ans = sheet.text_answer(f["label"], kind=t) if use_sheet else None
+            if ans:
+                try:
+                    _fill(f, ans)
+                    counts["filled"] += 1
+                    continue
+                except Exception:
+                    pass
+            _need(f, counts)
+            continue
+        if f["filled"] and key != "resume":
             continue
         if key and values.get(key):
             try:
-                _loc(f).fill(values[key])
-                _mark(f, "filled")
+                _fill(f, values[key])
                 counts["filled"] += 1
             except Exception:
                 pass
             continue
-        if key or f["type"] in ("checkbox", "radio") or f["tag"] == "select":
-            # a known field we have no value for (e.g. LinkedIn), or a choice we won't guess
-            if f["required"] and not f["filled"]:
-                _mark(f, "attention")
-                counts["attention"] += 1
+        if key:
+            if f["required"]:
+                _need(f, counts)
             continue
-        if f["tag"] == "textarea" or f["type"] in ("text", "url", ""):
-            if not f["filled"] and len(f["label"]) > 3:
+        if f["tag"] == "textarea" or t in ("text", "url", "number", "tel", "email", ""):
+            if len(f["label"]) > 3:
+                ans = sheet.text_answer(f["label"], kind=t) if use_sheet else None
+                if ans:
+                    try:
+                        _fill(f, ans)
+                        counts["filled"] += 1
+                        continue
+                    except Exception:
+                        pass
+                if t == "number":
+                    if f["required"]:
+                        _need(f, counts)
+                    continue
                 questions.append(f)
+            elif f["required"]:
+                _need(f, counts)
 
-    # 3) The form's own questions, answered from your profile (you'll read them)
+    # Radio-button questions (Yes/No, ranges, decline-to-answer)
+    for group in radio_groups.values():
+        if any(g["checked"] for g in group):
+            continue
+        q = group[0]["group"] or group[0]["label"]
+        labels = [g["label"] for g in group]
+        required = any(g["required"] for g in group) or q.rstrip().endswith("*")
+        for g in group:
+            g["required"] = required
+        opt = sheet.choose_option(q, labels) if use_sheet else None
+        if opt:
+            target = next(g for g in group if g["label"] == opt)
+            try:
+                _loc(target).check()
+                for g in group:
+                    _mark(g, "filled")
+                counts["filled"] += 1
+                continue
+            except Exception:
+                pass
+        if use_sheet and sheet.classify(q) not in ("demographic", "never"):
+            choice_items.append(("radio", group, q, labels))
+        elif required or sheet.classify(q) == "demographic":
+            _need(group[0], counts, q)
+
+    # The form's own written questions, answered from your profile
     questions = questions[:10]
     if questions:
         try:
@@ -313,18 +493,143 @@ def fill_page(page, job, cv_path, ask=None):
                     _loc(q).fill(a)
                     _mark(q, "ai")
                     counts["ai"] += 1
+                    continue
                 except Exception:
                     pass
-            elif q["required"]:
-                _mark(q, "attention")
-                counts["attention"] += 1
+            if q["required"]:
+                _need(q, counts)
 
-    banner(page, counts)
+    # Remaining multiple-choice questions: Claude may only pick a listed option it can justify
+    if choice_items:
+        try:
+            picks = answer_choices(job, [(q, opts) for _, _, q, opts in choice_items], ask=ask)
+        except Exception as exc:
+            log("error", f"Autofill couldn't choose options for {job.title}: {exc}", job=job)
+            picks = [""] * len(choice_items)
+        for (kind, target, q, opts), pick in zip(choice_items, picks):
+            try:
+                if pick and kind == "select":
+                    _loc(target).select_option(label=pick)
+                    _mark(target, "ai")
+                    counts["ai"] += 1
+                    continue
+                if pick and kind == "radio":
+                    _loc(next(g for g in target if g["label"] == pick)).check()
+                    for g in target:
+                        _mark(g, "ai")
+                    counts["ai"] += 1
+                    continue
+            except Exception:
+                pass
+            first = target if kind == "select" else target[0]
+            if (first.get("required") if kind == "select" else any(g["required"] for g in target)):
+                _need(first, counts, q)
+
+    counts["captcha"] = has_captcha(page)
+    counts["missing"] += missing_required(page, already=counts["missing"])
+    banner(page, counts, auto=auto)
     return counts
 
 
-def banner(page, counts, submitted=False):
-    if submitted:
+CAPTCHA_URL_RE = re.compile(r"recaptcha|hcaptcha|turnstile|challenges\.cloudflare|arkoselabs|funcaptcha|captcha", re.I)
+
+
+def has_captcha(page):
+    """A visible CAPTCHA challenge (invisible score-based ones don't count). NexScout never tries to solve these."""
+    for frame in _frames(page):
+        if frame == page.main_frame:
+            continue
+        if CAPTCHA_URL_RE.search(frame.url or "") and "size=invisible" not in (frame.url or ""):
+            try:
+                el = frame.frame_element()
+                box = el.bounding_box()
+                if box and box["width"] > 40 and box["height"] > 40 and el.is_visible():
+                    return True
+            except Exception:
+                continue
+    try:
+        return bool(page.evaluate("""() => [...document.querySelectorAll('.g-recaptcha:not([data-size="invisible"]), .h-captcha, .cf-turnstile, [class*="captcha" i]')]
+                                         .some(e => e.getClientRects().length && e.offsetHeight > 30)"""))
+    except Exception:
+        return False
+
+
+def missing_required(page, already=()):
+    """Required fields that are still empty after filling (the final safety check before any submit)."""
+    out = []
+    seen_radio = set()
+    for f in scan(page):
+        if not f["required"]:
+            continue
+        if f["type"] == "radio":
+            key = (id(f["frame"]), f["name"])
+            if key in seen_radio:
+                continue
+            seen_radio.add(key)
+            group_checked = f["frame"].evaluate(
+                "(n) => !!document.querySelector(`input[type=radio][name=\"${CSS.escape(n)}\"]:checked`)", f["name"]) if f["name"] else f["checked"]
+            if group_checked:
+                continue
+        elif f["filled"]:
+            continue
+        q = (f["group"] or f["label"] or f["name"] or "a field")[:120]
+        if q not in already and q not in out:
+            out.append(q)
+    return out
+
+
+PICK_SUBMIT_JS = r"""
+() => {
+  // the <form> holding most of the fields NexScout filled, then its submit button
+  const filled = [...document.querySelectorAll('[data-nexscout-state]')];
+  const score = new Map();
+  filled.forEach(el => { const f = el.closest('form') || document.body; score.set(f, (score.get(f) || 0) + 1); });
+  const form = [...score.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0])[0];
+  if (!form) return false;
+  const cands = [...form.querySelectorAll('button, input[type=submit]')].filter(b => b.getClientRects().length && !b.disabled);
+  const text = b => (b.innerText || b.value || '').trim().toLowerCase();
+  const btn = cands.find(b => /submit|send application|apply now|^apply$|complete application/.test(text(b)) && !/linkedin|indeed|google|save|draft|cancel/.test(text(b)))
+           || cands.find(b => (b.type || '').toLowerCase() === 'submit' && !/search|subscribe|linkedin/.test(text(b)));
+  if (!btn) return false;
+  btn.setAttribute('data-nexscout-submit', '1');
+  return true;
+}
+"""
+
+
+def submit_form(page, timeout_s=20):
+    """Click the application form's own submit button once and wait for a confirmation.
+    Returns True only if a confirmation was seen."""
+    frames = sorted(_frames(page), key=lambda fr: -_safe_count(fr, "[data-nexscout-state]"))
+    clicked = False
+    for frame in frames:
+        try:
+            if frame.evaluate(PICK_SUBMIT_JS):
+                frame.locator("[data-nexscout-submit]").first.click()
+                clicked = True
+                break
+        except Exception:
+            continue
+    if not clicked:
+        return False
+    for _ in range(timeout_s * 2):
+        page.wait_for_timeout(500)
+        if looks_submitted(page):
+            return True
+    return False
+
+
+def _safe_count(frame, sel):
+    try:
+        return frame.locator(sel).count()
+    except Exception:
+        return 0
+
+
+def banner(page, counts, submitted=False, auto=False):
+    if auto and not submitted:
+        html = "<b>NexScout autopilot</b> is filling this application."
+    elif submitted:
         html = "<b>Submitted.</b> NexScout marked this job Applied and set your follow-up. Close this tab for the next one."
     else:
         html = (f"<b>NexScout filled {counts['filled']} field(s)</b> (green)"
@@ -342,10 +647,8 @@ def banner(page, counts, submitted=False):
 def looks_submitted(page):
     for frame in _frames(page):
         try:
-            if SUBMITTED_URL_RE.search(frame.url or "") and frame.url != "about:blank":
-                text = frame.evaluate("() => document.body ? document.body.innerText.slice(0, 4000) : ''")
-                if SUBMITTED_RE.search(text) or "confirm" in frame.url.lower():
-                    return True
+            if SUBMITTED_URL_RE.search(frame.url or ""):
+                return True
             text = frame.evaluate("() => document.body ? document.body.innerText.slice(0, 4000) : ''")
             if SUBMITTED_RE.search(text):
                 return True
@@ -360,10 +663,16 @@ def mark_filled(job):
     job.save(update_fields=["apply_queue", "autofilled_at", "updated_at"])
 
 
-def mark_submitted(job):
+def mark_submitted(job, by="you", proof=""):
     job.refresh_from_db()
     if job.status not in (Job.Status.APPLIED, Job.Status.INTERVIEWING, Job.Status.OFFER):
         job.set_status(Job.Status.APPLIED)
-    job.apply_queue = ""
-    job.save(update_fields=["apply_queue", "updated_at"])
-    log("apply", f"Application submitted on the company form: {job.title} @ {job.company}", job=job)
+    job.apply_queue, job.apply_error = "", ""
+    job.form_submitted_at = timezone.now()
+    job.applied_via, job.applied_by = "form", by
+    if proof:
+        job.apply_proof = str(proof)
+    job.save(update_fields=["apply_queue", "apply_error", "form_submitted_at", "applied_via", "applied_by",
+                            "apply_proof", "updated_at"])
+    log("apply", f"Application submitted on the company form: {job.title} @ {job.company}"
+                 + (" (by autopilot)" if by == "autopilot" else ""), job=job)

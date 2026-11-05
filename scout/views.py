@@ -17,6 +17,7 @@ from django.views.decorators.http import require_POST
 from .forms import JobDraftForm, JobEmailForm, JobNotesForm, OutreachForm, OutreachMessageForm, ProfileForm, SettingsForm
 from .models import ActivityLog, Job, LLMCall, OutreachTarget, Profile, ScoutSettings, SourceState
 from .services import drafting, mailer, outreach, scoring
+from .services.auto_apply import auto_apply_problems
 from .services.activity import log
 from .services.claude_client import ClaudeError
 from .services.collect import fetch_all, refilter_unscored
@@ -200,7 +201,7 @@ def job_detail(request, pk):
         "job": job, "draft_form": JobDraftForm(instance=job), "notes_form": JobNotesForm(instance=job),
         "email_form": JobEmailForm(instance=job), "email_ready": mailer.email_ready(),
         "cv_ready": bool(mailer.cv_path()), "send_enabled": s.send_enabled,
-        "auto_send_problems": mailer.auto_send_problems(job, s) if job.apply_email and not job.email_sent_at else [],
+        "auto_send_problems": auto_apply_problems(job, s) if not (job.email_sent_at or job.form_submitted_at) else [],
         "auto_send": s.auto_send, "followup_due": job.is_followup_due, "queued_minutes": queued_minutes,
         "statuses": Job.Status.choices, "threshold": s.score_threshold, "project": project,
         "source_label": get_sources()[job.source].label if job.source in get_sources() else job.source,
@@ -581,6 +582,15 @@ def autofill_start(request):
     subprocess.Popen(cmd, **kwargs)
     messages.success(request, "Opening the browser… Check each filled form, then click Submit yourself.")
     return _back(request, reverse("scout:apply_queue"))
+
+
+@owner_only
+def job_proof(request, pk):
+    from django.http import FileResponse, Http404
+    job = get_object_or_404(Job, pk=pk)
+    if not job.apply_proof or not Path(job.apply_proof).is_file():
+        raise Http404("No confirmation screenshot for this job.")
+    return FileResponse(open(job.apply_proof, "rb"), content_type="image/png")
 
 
 @owner_only

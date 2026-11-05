@@ -101,10 +101,11 @@ class SendTests(TestCase):
     def test_auto_send_only_safe_jobs(self):
         s = ScoutSettings.get_solo()
         s.auto_send = True
+        s.auto_send_min_score = 75
         s.save()
         good = self.job(1)
         self.job(2, score=70)                                     # below auto-send score
-        self.job(3, open_to_nigeria="unclear")
+        self.job(3, open_to_nigeria="no")
         self.job(4, scam_flags=["Asks you to pay"])
         self.job(5, apply_email="someone@gmail.com")              # personal address
         self.job(6, draft_warnings=["Numbers not in your CV: 500"])
@@ -115,7 +116,10 @@ class SendTests(TestCase):
         good.refresh_from_db()
         self.assertEqual(good.email_sent_by, "autopilot")
 
-    def test_auto_send_off_by_default(self):
+    def test_auto_send_can_be_switched_off(self):
+        s = ScoutSettings.get_solo()
+        s.auto_send = False
+        s.save()
         self.job()
         self.assertEqual(mailer.auto_send_pending()["sent"], 0)
         self.assertEqual(len(mail.outbox), 0)

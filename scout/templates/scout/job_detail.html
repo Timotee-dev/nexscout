@@ -103,7 +103,8 @@
 
     <section class="panel" id="apply">
       <div class="panel-head"><h2>Apply</h2>
-        {% if job.email_sent_at %}<span class="tag ok">Sent {{ job.email_sent_at|date:"j M, H:i" }}</span>
+        {% if job.form_submitted_at %}<span class="tag ok">Applied {{ job.form_submitted_at|date:"j M, H:i" }}</span>
+        {% elif job.email_sent_at %}<span class="tag ok">Sent {{ job.email_sent_at|date:"j M, H:i" }}</span>
         {% elif job.apply_email %}<span class="tag accent">Applies by email</span>
         {% else %}<span class="muted">Applies on the company's site</span>{% endif %}</div>
       <div class="panel-body">
@@ -124,7 +125,10 @@
         </div>
       {% endif %}
       {% if job.cover_note or job.cv_file %}<p class="muted small" style="margin:0 0 12px">Tailored CV: <a class="link" href="{% url 'scout:job_cv' job.pk %}" target="_blank">{% if job.cv_file %}download PDF{% else %}build & download{% endif %}</a>{% if job.cv_file %} · <a class="link" href="{% url 'scout:job_cv' job.pk %}?rebuild=1" target="_blank">rebuild</a>{% endif %}</p>{% endif %}
-      {% if job.email_sent_at %}
+      {% if job.form_submitted_at %}
+        <p style="margin:0 0 12px">Applied on the company's form on <b>{{ job.form_submitted_at|date:"D j M Y, H:i" }}</b>{% if job.applied_by == 'autopilot' %}, by autopilot{% endif %}, with your tailored CV.
+          {% if job.apply_proof %}<a class="link" href="{% url 'scout:job_proof' job.pk %}" target="_blank">See the confirmation screenshot</a>{% endif %}</p>
+      {% elif job.email_sent_at %}
         <p style="margin:0 0 12px">Your application went to <b>{{ job.apply_email }}</b> on {{ job.email_sent_at|date:"D j M Y, H:i" }}{% if job.email_sent_by == 'autopilot' %}, sent by autopilot{% endif %}, with your CV attached. It's also in your Gmail Sent folder.</p>
         {% if job.followup_email_sent_at %}<p class="muted small" style="margin:0">Follow-up sent {{ job.followup_email_sent_at|date:"D j M" }}.</p>
         {% elif job.status == 'applied' %}
@@ -161,9 +165,6 @@
           <button class="btn primary" {% if not email_ready or not cv_ready or not job.email_body %}disabled{% endif %}>Send application</button>
         </form>
         {% endif %}
-        {% if auto_send %}
-          <p class="muted small" style="margin:12px 0 0">{% if auto_send_problems %}Autopilot won't send this one by itself: {{ auto_send_problems|join:", " }}.{% else %}Autopilot will send this one on its next cycle unless you send or skip it first.{% endif %}</p>
-        {% endif %}
       {% else %}
         <p style="margin:0 0 12px">This job takes applications through the company's own form{% if job.ats %} ({{ job.ats|capfirst }}){% endif %}. NexScout can open it in your browser, fill your details, upload your tailored CV and draft answers, then stop so you can check everything and click <b>Submit</b> yourself.</p>
         <div class="row-actions" style="margin-bottom:14px">
@@ -184,6 +185,9 @@
           <input type="hidden" name="email_subject" value=""><input type="hidden" name="email_body" value="">
           <button class="btn">Use email</button>
         </form>
+      {% endif %}
+      {% if auto_send and not job.email_sent_at and not job.form_submitted_at %}
+        <p class="muted small" style="margin:14px 0 0">{% if auto_send_problems %}Autopilot won't apply to this one by itself: {{ auto_send_problems|join:", " }}.{% else %}Autopilot will apply to this one by itself on its next cycle.{% endif %}</p>
       {% endif %}
       </div>
     </section>

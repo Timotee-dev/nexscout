@@ -1,0 +1,20 @@
+<!doctype html><html><head><title>Python Engineer - Delta</title></head><body>
+<form action="thanks.html" method="get">
+  <div><label for="fn">First name *</label><input id="fn" name="fn" required></div>
+  <div><label for="ln">Last name *</label><input id="ln" name="ln" required></div>
+  <div><label for="em">Email *</label><input id="em" name="em" type="email" required></div>
+  <div><label for="ph">Phone *</label><input id="ph" name="ph" required></div>
+  <div><label for="cv">Resume *</label><input id="cv" name="cv" type="file" required></div>
+  <div><label for="country">Country *</label><select id="country" name="country" required><option value="">Select…</option><option>Kenya</option><option>Nigeria</option><option>United States</option></select></div>
+  <fieldset><legend>Are you legally authorized to work in the United States? *</legend>
+    <label><input type="radio" name="auth" value="y" required> Yes</label><label><input type="radio" name="auth" value="n"> No</label></fieldset>
+  <fieldset><legend>Will you now or in the future require visa sponsorship? *</legend>
+    <label><input type="radio" name="sp" value="y" required> Yes</label><label><input type="radio" name="sp" value="n"> No</label></fieldset>
+  <div><label for="yrs">Years of professional experience *</label><select id="yrs" name="yrs" required><option value="">Choose</option><option>0-1 years</option><option>1-3 years</option><option>3-5 years</option><option>5+ years</option></select></div>
+  <div><label for="sal">What are your salary expectations? *</label><input id="sal" name="sal" required></div>
+  <div><label for="gender">Gender</label><select id="gender" name="gender"><option value="">Select</option><option>Male</option><option>Female</option><option>Decline to self-identify</option></select></div>
+  <div><label for="why">Why do you want to work at Delta? *</label><textarea id="why" name="why" required></textarea></div>
+  <div><label><input type="checkbox" name="consent" required> I consent to Delta processing my data for recruitment *</label></div>
+  <input type="text" name="q" placeholder="Search jobs"><button type="button">Search</button>
+  <button type="submit">Submit application</button>
+</form></body></html>

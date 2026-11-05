@@ -5,7 +5,7 @@
 
 <div class="settings-grid">
   <nav class="settings-nav" aria-label="Settings sections">
-    <a href="#search">Search</a><a href="#filters">Filters</a><a href="#claude">Claude</a><a href="#profile">Profile</a><a href="#sources">Source health</a>
+    <a href="#search">Search</a><a href="#filters">Filters</a><a href="#claude">Claude</a><a href="#autopilot">Autopilot</a><a href="#applying">Hands-free applying</a><a href="#answers">Answer sheet</a><a href="#profile">Profile</a><a href="#sources">Source health</a>
   </nav>
 
   <div>
@@ -66,21 +66,44 @@
       </div>
 
       <div class="set-sec" id="applying">
-        <div><h2>Applying by email</h2><p class="desc-s">For jobs that say "email us your CV". Sent from your Gmail with your CV attached, and saved in your Sent folder.</p>
+        <div><h2>Hands-free applying</h2><p class="desc-s">Autopilot applies by itself: email jobs from your Gmail, and company forms in a hidden browser. Forms are only submitted when every required question is answered and there's no CAPTCHA. A screenshot of each confirmation is kept.</p>
           <p class="desc-s">
             {% if email_ready %}<span class="tag ok">Gmail connected</span>{% else %}<span class="tag warn">Gmail not set up</span>{% endif %}
-            {% if cv_ready %}<span class="tag ok">CV found</span>{% else %}<span class="tag warn">cv.pdf missing</span>{% endif %}
-            <br>Sent today: {{ sent_today }}</p></div>
+            {% if cv_ready %}<span class="tag ok">CV found</span>{% else %}<span class="tag">Using tailored CVs only</span>{% endif %}
+            {% if form.instance.answers_confirmed %}<span class="tag ok">Answers confirmed</span>{% else %}<span class="tag warn">Answers not confirmed</span>{% endif %}
+            <br>Applied today: {{ sent_today }} / {{ form.instance.daily_send_cap }}</p></div>
         <div>
-          <div class="field"><label class="toggle">{{ form.tailored_cv }}Build a tailored CV for each job (facts from your CV only)</label></div>
-          <div class="field"><label class="toggle">{{ form.send_enabled }}Allow sending applications (you press Send)</label></div>
-          <div class="field"><label class="toggle">{{ form.auto_send }}Send automatically when a job passes every safety check</label>
-            <span class="help">Checks: score at or above the number below, confirmed open to Nigeria, no scam warnings, draft written with no warnings, a company email (not Gmail/Yahoo), never the same address twice.</span></div>
+          <div class="field"><label class="toggle">{{ form.auto_send }}Apply automatically (emails and company forms)</label>
+            <span class="help">Only jobs at or above the score below, open to Nigeria, with no scam warnings and a draft that passed the truth check. Never the same company twice in 30 days.</span></div>
           <div class="form-grid">
             {% include "scout/_field.html" with f=form.auto_send_min_score %}
             {% include "scout/_field.html" with f=form.daily_send_cap %}
           </div>
-          <div class="field"><label class="toggle">{{ form.auto_followup }}Send follow-ups automatically when they're due</label></div>
+          <div class="field"><label class="toggle">{{ form.auto_followup }}Send follow-up emails automatically when due</label></div>
+          <div class="field"><label class="toggle">{{ form.tailored_cv }}Build a tailored CV for each job (facts from your CV only)</label></div>
+          <div class="field"><label class="toggle">{{ form.send_enabled }}Allow sending emails from my Gmail</label></div>
+        </div>
+      </div>
+
+      <div class="set-sec" id="answers">
+        <div><h2>Your answer sheet</h2><p class="desc-s">Application forms nearly always ask these. NexScout answers them <b>only</b> from here, never by guessing. Demographic questions (gender, race, disability, veteran) are always answered "prefer not to say".</p>
+          <p class="desc-s"><b>Check every answer is true for you</b>, then tick the box at the bottom. Forms aren't submitted automatically until you do.</p></div>
+        <div>
+          {% include "scout/_field.html" with f=form.ans_work_authorization %}
+          <div class="form-grid">
+            {% include "scout/_field.html" with f=form.ans_authorized_elsewhere %}
+            {% include "scout/_field.html" with f=form.ans_need_sponsorship %}
+            {% include "scout/_field.html" with f=form.ans_relocate %}
+            {% include "scout/_field.html" with f=form.ans_degree_completed %}
+            {% include "scout/_field.html" with f=form.ans_years_experience %}
+            {% include "scout/_field.html" with f=form.ans_salary_number %}
+          </div>
+          {% include "scout/_field.html" with f=form.ans_salary %}
+          {% include "scout/_field.html" with f=form.ans_notice_period %}
+          {% include "scout/_field.html" with f=form.ans_education %}
+          {% include "scout/_field.html" with f=form.ans_linkedin %}
+          <div class="field"><label class="toggle">{{ form.ans_consent }}Tick privacy / data-processing consent boxes on application forms</label></div>
+          <div class="field"><label class="toggle confirm">{{ form.answers_confirmed }}<b>I've checked these answers and they're true for me</b></label></div>
         </div>
       </div>
 

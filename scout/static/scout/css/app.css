@@ -519,3 +519,6 @@ label, .label { font-size: 13px; font-weight: 550; color: var(--text-2); }
 .seg a { flex-shrink: 0; }
 .toggles .toggle { max-width: 100%; }
 textarea, input, select { max-width: 100%; }
+
+.toggle.confirm { border-color: var(--accent-line); background: var(--accent-soft); }
+.toggle.confirm:has(input:checked) { border-color: #bfe5d3; background: var(--ok-soft); }

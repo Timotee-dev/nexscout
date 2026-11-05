@@ -200,6 +200,23 @@ high score, confirmed open to Nigeria, no scam warnings, a clean draft and a com
 same address, and never more than your daily limit. Jobs that use a company application form (Greenhouse, Lever, etc.)
 still need you to apply on their site.
 
+## Hands-free applying (up to 20 a day)
+
+Settings → **Hands-free applying** is on by default after this update. Each autopilot cycle, NexScout applies by
+itself to new jobs at or above your auto-apply score (default 60), best first, until today's limit (default 20):
+
+- **Email jobs**: sent from your Gmail with a tailored CV (needs Gmail in `.env`).
+- **Company forms**: filled in a hidden browser and **submitted**, but only when you've confirmed your
+  **answer sheet** (Settings → Your answer sheet), every required question is answered from your profile or
+  answer sheet, there's no visible CAPTCHA, and a confirmation page appears. A screenshot of each confirmation
+  is kept (job page → "See the confirmation screenshot").
+- Never: jobs with scam warnings, drafts that failed the truth check, jobs not open to Nigeria, or the same
+  company twice in 30 days. Anything it can't do safely waits in **Apply → Needs your review** with the reason.
+
+Demographic questions are always answered "prefer not to say". Legal questions (work authorisation, sponsorship,
+salary, notice period) are answered only from your answer sheet, so check it's true for you before ticking
+"I've checked these answers".
+
 ## Swipe, tailored CVs and autofill
 
 - **Swipe** (top menu): your scored matches as cards, best first. Right = apply, left = skip, up = save.

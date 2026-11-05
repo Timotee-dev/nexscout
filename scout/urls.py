@@ -19,6 +19,7 @@ urlpatterns = [
     path("apply/<int:pk>/", views.apply_queue_action, name="apply_queue_action"),
     path("apply/autofill/", views.autofill_start, name="autofill_start"),
     path("jobs/<int:pk>/cv/", views.job_cv, name="job_cv"),
+    path("jobs/<int:pk>/proof/", views.job_proof, name="job_proof"),
     path("outreach/", views.outreach_list, name="outreach"),
     path("outreach/action/", views.outreach_action, name="outreach_bulk"),
     path("outreach/<int:pk>/", views.outreach_detail, name="outreach_detail"),

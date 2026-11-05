@@ -89,10 +89,10 @@ class ScoutSettings(SingletonModel):
         help_text="Jobs Claude scores below this move to Filtered out. 0 keeps everything.",
     )
     score_threshold = models.PositiveSmallIntegerField(
-        "Draft threshold", default=65, help_text="Jobs at or above this get a cover note drafted automatically.",
+        "Draft threshold", default=60, help_text="Jobs at or above this get a cover note drafted automatically.",
     )
-    daily_score_cap = models.PositiveSmallIntegerField(default=40, help_text="Max jobs scored per day.")
-    daily_draft_cap = models.PositiveSmallIntegerField(default=10, help_text="Max application drafts per day.")
+    daily_score_cap = models.PositiveSmallIntegerField(default=120, help_text="Max jobs scored per day.")
+    daily_draft_cap = models.PositiveSmallIntegerField(default=30, help_text="Max application drafts per day.")
     daily_outreach_cap = models.PositiveSmallIntegerField(default=10, help_text="Max outreach messages drafted per day.")
     score_batch_size = models.PositiveSmallIntegerField(default=5, help_text="Jobs per Claude call when scoring.")
     draft_batch_size = models.PositiveSmallIntegerField(default=3, help_text="Jobs per Claude call when drafting.")
@@ -119,17 +119,49 @@ class ScoutSettings(SingletonModel):
         help_text="Shows Send buttons for jobs that take applications by email. Needs Gmail set up in .env.",
     )
     auto_send = models.BooleanField(
-        "Send automatically", default=False,
-        help_text="Autopilot sends email applications without asking, but only for jobs that pass every safety check.",
+        "Apply automatically", default=True,
+        help_text="Autopilot applies by itself (emails and company forms) to jobs that pass every safety check.",
     )
-    auto_send_min_score = models.PositiveSmallIntegerField("Auto-send only at score", default=75)
-    daily_send_cap = models.PositiveSmallIntegerField("Max applications sent per day", default=5)
+    auto_send_min_score = models.PositiveSmallIntegerField("Apply automatically at score", default=60)
+    daily_send_cap = models.PositiveSmallIntegerField("Max applications per day", default=20)
+
+    # Your answers to the questions application forms always ask (used for hands-free form applying)
+    answers_confirmed = models.BooleanField(
+        "I've checked these answers", default=False,
+        help_text="Forms are only submitted automatically after you've checked the answers below once.",
+    )
+    ans_work_authorization = models.CharField(
+        "Work authorisation (in your words)", max_length=300,
+        default="I'm based in Nigeria and work remotely as an independent contractor.",
+    )
+    ans_authorized_elsewhere = models.CharField(
+        "Authorised to work in the US / UK / EU?", max_length=3, default="no", choices=[("yes", "Yes"), ("no", "No")])
+    ans_need_sponsorship = models.CharField(
+        "Need visa sponsorship (for a remote role)?", max_length=3, default="no", choices=[("yes", "Yes"), ("no", "No")],
+        help_text="Remote from Nigeria usually means no. Choose Yes if you'd want them to relocate you.")
+    ans_relocate = models.CharField("Willing to relocate?", max_length=3, default="no", choices=[("yes", "Yes"), ("no", "No")])
+    ans_salary = models.CharField("Salary expectation (text)", max_length=200,
+                                  default="Open to discussing, based on the role and scope.")
+    ans_salary_number = models.CharField(
+        "Salary expectation (number, USD/year)", max_length=20, blank=True,
+        help_text="Only used where a form insists on a number. Leave blank to have those forms left for you.")
+    ans_notice_period = models.CharField("Notice period / start date", max_length=200,
+                                         default="Available to start within 2 weeks.")
+    ans_years_experience = models.CharField("Years of experience", max_length=10, default="2")
+    ans_degree_completed = models.CharField("Degree completed?", max_length=3, default="no", choices=[("yes", "Yes"), ("no", "No")])
+    ans_education = models.CharField(
+        "Education", max_length=300,
+        default="B.Sc. Computer Science, University of Medical Sciences (UNIMED), Ondo, Nigeria (in progress)")
+    ans_linkedin = models.URLField("LinkedIn URL", blank=True)
+    ans_consent = models.BooleanField(
+        "Tick privacy / data-processing consent boxes", default=True,
+        help_text="Needed to submit most forms. Demographic questions are always answered 'prefer not to say'.")
     tailored_cv = models.BooleanField(
         "Tailored CV for each job", default=True,
         help_text="Builds a PDF CV for each job that leads with the most relevant projects and skills (facts from your CV only).",
     )
     auto_followup = models.BooleanField(
-        "Send follow-ups automatically", default=False,
+        "Send follow-ups automatically", default=True,
         help_text="When a follow-up is due, autopilot sends a short, polite follow-up email.",
     )
 
@@ -324,6 +356,10 @@ class Job(models.Model):
     cv_file = models.CharField(max_length=500, blank=True)
     cv_built_at = models.DateTimeField(null=True, blank=True)
     apply_error = models.CharField(max_length=300, blank=True, help_text="Why the last apply attempt didn't finish.")
+    form_submitted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    applied_via = models.CharField(max_length=10, blank=True)   # email / form / manual
+    applied_by = models.CharField(max_length=20, blank=True)    # you / autopilot
+    apply_proof = models.CharField(max_length=500, blank=True, help_text="Screenshot taken right after submitting.")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

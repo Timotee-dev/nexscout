@@ -17,7 +17,7 @@ from .activity import log
 from .collect import fetch_all
 from .drafting import draft_pending
 from .applier import process_queued
-from .mailer import auto_send_pending
+from .auto_apply import run_auto_apply
 from .scoring import score_pending
 
 LOCK = Path(settings.BASE_DIR) / ".run_scout.lock"
@@ -70,11 +70,17 @@ def run_cycle(minutes=30, no_ai=False, force_fetch=False, score_limit=None, draf
             if q["drafted"]:
                 out(f"Apply queue: {q['drafted']} drafted, {q.get('sent', 0)} sent, "
                     f"{q.get('form', 0)} ready to autofill, {q.get('review', 0)} need review")
-        if send:
-            st = auto_send_pending()
-            summary["sent"], summary["followups"] = st["sent"], st["followups"]
-            if st["sent"] or st["followups"]:
-                out(f"Sent: {st['sent']} applications, {st['followups']} follow-ups")
+        if send and time.monotonic() < deadline:
+            try:
+                st = run_auto_apply(deadline=deadline, out=out)
+            except Exception as exc:   # applying problems must never stop fetching/scoring next time
+                log("error", f"Hands-free applying stopped this cycle: {exc}")
+                st = {"emailed": 0, "forms": 0, "needs_you": 0, "followups": 0}
+            summary["sent"] = st["emailed"] + st["forms"]
+            summary["followups"] = st["followups"]
+            if summary["sent"] or st["needs_you"] or st["followups"]:
+                out(f"Applied: {st['emailed']} by email, {st['forms']} by form, {st['needs_you']} left for you, "
+                    f"{st['followups']} follow-ups")
 
         mins = (time.monotonic() - started) / 60
         text = (f"{summary['fetched_kept']} new · {summary['scored']} scored · {summary['drafted']} drafted"

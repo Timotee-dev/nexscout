@@ -38,7 +38,9 @@ def cv_path():
 
 
 def sent_today():
-    return Job.objects.filter(email_sent_at__date=timezone.localdate()).count()
+    """Applications sent today, by email or company form, by you or autopilot (one daily limit for both)."""
+    today = timezone.localdate()
+    return Job.objects.filter(Q(email_sent_at__date=today) | Q(form_submitted_at__date=today)).count()
 
 
 # ------------------------------------------------------------------ composing
@@ -154,7 +156,8 @@ def send_application(job, by="you"):
     job.email_sent_at = timezone.now()
     job.email_sent_by = by
     job.email_error = ""
-    job.save(update_fields=["email_sent_at", "email_sent_by", "email_error", "updated_at"])
+    job.applied_via, job.applied_by = "email", by
+    job.save(update_fields=["email_sent_at", "email_sent_by", "email_error", "applied_via", "applied_by", "updated_at"])
     if job.status in (Job.Status.NEW, Job.Status.SHORTLISTED, Job.Status.SKIPPED):
         job.set_status(Job.Status.APPLIED)
     log("apply", f"Application emailed to {job.apply_email} for {job.title} @ {job.company} (sent by {by})", job=job)
@@ -189,62 +192,13 @@ def send_followup(job, by="you"):
 # ------------------------------------------------------------------ autopilot
 
 def auto_send_problems(job, s=None):
-    """Every reason autopilot would NOT send this one by itself. Empty list = safe to send."""
-    s = s or ScoutSettings.get_solo()
-    problems = []
-    if not job.apply_email:
-        problems.append("no application email")
-    if job.email_sent_at:
-        problems.append("already sent")
-    if job.status not in (Job.Status.NEW, Job.Status.SHORTLISTED):
-        problems.append("you've already moved this job")
-    if job.score is None or job.score < s.auto_send_min_score:
-        problems.append(f"score below {s.auto_send_min_score}")
-    if job.open_to_nigeria != Job.NigeriaFit.YES:
-        problems.append("not confirmed open to Nigeria")
-    if job.scam_flags or job.ai_red_flags:
-        problems.append("scam warnings")
-    if not job.cover_note or not job.drafted_at:
-        problems.append("no draft yet")
-    if job.draft_warnings:
-        problems.append("draft has warnings to check")
-    domain = job.apply_email.partition("@")[2]
-    if any(domain.startswith(p) or p in domain for p in PERSONAL_DOMAINS):
-        problems.append("goes to a personal email address")
-    if job.apply_email and Job.objects.filter(apply_email__iexact=job.apply_email,
-                                              email_sent_at__isnull=False).exclude(pk=job.pk).exists():
-        problems.append("you already emailed this address")
-    return problems
+    """Kept for compatibility: see auto_apply.auto_apply_problems."""
+    from .auto_apply import auto_apply_problems
+    return auto_apply_problems(job, s)
 
 
 def auto_send_pending():
-    s = ScoutSettings.get_solo()
-    stats = {"sent": 0, "followups": 0, "blocked": 0}
-    if not (s.send_enabled and email_ready()):
-        return stats
-    if s.auto_send:
-        qs = (Job.objects.filter(~Q(apply_email=""), email_sent_at__isnull=True,
-                                 status__in=[Job.Status.NEW, Job.Status.SHORTLISTED],
-                                 score__gte=s.auto_send_min_score)
-              .order_by("-score", "-posted_at"))
-        for job in qs:
-            if sent_today() >= s.daily_send_cap:
-                break
-            if auto_send_problems(job, s):
-                continue
-            try:
-                send_application(job, by="autopilot")
-                stats["sent"] += 1
-            except SendBlocked:
-                stats["blocked"] += 1
-    if s.auto_followup:
-        due = Job.objects.filter(status=Job.Status.APPLIED, email_sent_at__isnull=False,
-                                 followup_email_sent_at__isnull=True,
-                                 follow_up_on__lte=timezone.localdate())
-        for job in due:
-            try:
-                send_followup(job, by="autopilot")
-                stats["followups"] += 1
-            except SendBlocked:
-                stats["blocked"] += 1
-    return stats
+    """Kept for compatibility: hands-free applying now lives in auto_apply.run_auto_apply."""
+    from .auto_apply import run_auto_apply
+    st = run_auto_apply()
+    return {"sent": st["emailed"] + st["forms"], "followups": st["followups"], "blocked": st["needs_you"]}

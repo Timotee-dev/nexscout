@@ -109,3 +109,17 @@ def pct(value, total):
         return max(0, min(100, round(100 * int(value) / max(1, int(total)))))
     except (TypeError, ValueError):
         return 0
+
+
+@register.simple_tag
+def asset(path):
+    """Static URL with a version stamp, so browsers always load the newest CSS/JS after an update."""
+    import os
+    from django.contrib.staticfiles import finders
+    from django.templatetags.static import static
+    found = finders.find(path)
+    try:
+        version = int(os.path.getmtime(found)) if found else 0
+    except OSError:
+        version = 0
+    return f"{static(path)}?v={version}"

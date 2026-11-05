@@ -49,12 +49,15 @@
     </div>
   </div>
 
-  <div class="swipe-controls" {% if not deck %}hidden{% endif %}>
-    <button class="sbtn skip" data-decision="skip" title="Skip (left arrow)">✕</button>
-    <button class="sbtn save" data-decision="save" title="Save for later (up arrow)">★</button>
-    <button class="sbtn apply" data-decision="apply" title="Apply (right arrow)">✓</button>
-  </div>
+  {% if deck %}
+  <form class="swipe-controls" id="swipe-controls" method="post" action="{% url 'scout:swipe_decide' deck.0.pk %}">{% csrf_token %}
+    <button class="sbtn skip" name="decision" value="skip" title="Skip (left arrow)" aria-label="Skip">✕</button>
+    <button class="sbtn save" name="decision" value="save" title="Save for later (up arrow)" aria-label="Save for later">★</button>
+    <button class="sbtn apply" name="decision" value="apply" title="Apply (right arrow)" aria-label="Apply">✓</button>
+  </form>
+  {% endif %}
   <p class="muted small swipe-hint">Keyboard: ← skip · ↑ save · → apply. Email jobs are sent from your Gmail{% if not email_ready %} once it's set up{% endif %} ({{ sent_today }}/{{ send_cap }} today). Form jobs go to the Apply queue for autofill.</p>
   <div class="swipe-toast" id="swipe-toast" role="status"></div>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% asset 'scout/js/swipe.js' %}" defer></script>{% endblock %}

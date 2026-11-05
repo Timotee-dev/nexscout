@@ -464,7 +464,7 @@ label, .label { font-size: 13px; font-weight: 550; color: var(--text-2); }
   transform: translateY(calc(min(var(--i), 2) * 10px)) scale(calc(1 - min(var(--i), 2) * .035));
   z-index: calc(100 - var(--i)); transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s; user-select: none; }
 .scard:nth-child(n+4) { opacity: 0; pointer-events: none; }
-.scard:not(:first-child) { pointer-events: none; }
+.scard ~ .scard { pointer-events: none; }
 .scard.dragging { transition: none; cursor: grabbing; }
 .scard.gone { opacity: 0; pointer-events: none; }
 .scard-top { display: flex; gap: 18px; align-items: center; padding: 22px 24px 18px; border-bottom: 1px solid var(--line); }
@@ -485,7 +485,11 @@ label, .label { font-size: 13px; font-weight: 550; color: var(--text-2); }
 .deck-empty .t { font-size: 17px; font-weight: 650; margin: 0 0 4px; }
 .deck-empty .btn { margin: 14px auto 0; }
 .swipe-controls { display: flex; justify-content: center; gap: 22px; margin: 26px 0 10px; }
-.swipe-controls[hidden] { display: none; }
+.swipe-controls[hidden] { display: none !important; }
+.deck.ready .scard:first-child, .deck.ready .scard:not(.gone):first-of-type { cursor: grab; }
+.scard.dragging { cursor: grabbing; }
+/* Sideways finger moves must reach the swipe code everywhere on the card (scroll areas reset touch-action) */
+.scard, .scard * { touch-action: pan-y; }
 .sbtn { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); font-size: 26px; cursor: pointer; display: grid; place-items: center; transition: transform .12s, box-shadow .12s; }
 .sbtn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .sbtn:active { transform: scale(.94); }
@@ -507,3 +511,11 @@ label, .label { font-size: 13px; font-weight: 550; color: var(--text-2); }
   .scard-head h2 { font-size: 17px; }
   .scard-body { padding: 14px 18px; }
 }
+
+/* ------------------------------------------------------------ never wider than the screen */
+.layout-2 > *, .grid-2 > *, .settings-grid > *, .set-sec > *, .split > *, .detail > *, .form-grid > * { min-width: 0; }
+.seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+.seg a { flex-shrink: 0; }
+.toggles .toggle { max-width: 100%; }
+textarea, input, select { max-width: 100%; }

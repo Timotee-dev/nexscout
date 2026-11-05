@@ -93,7 +93,7 @@ class SwipeTests(TestCase):
         return Job.objects.create(**base)
 
     def post(self, j, decision):
-        return self.client.post(f"/swipe/{j.pk}/", {"decision": decision}).json()
+        return self.client.post(f"/swipe/{j.pk}/", {"decision": decision}, HTTP_X_REQUESTED_WITH="fetch").json()
 
     def test_deck_shows_best_open_matches(self):
         a, b = self.job(1, score=90), self.job(2, score=60)
@@ -153,3 +153,21 @@ class SwipeTests(TestCase):
         r = self.client.get(f"/jobs/{j.pk}/cv/")
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertTrue(b"".join(r.streaming_content).startswith(b"%PDF"))
+
+
+class SwipeFallbackAndAssetsTests(TestCase):
+    def test_buttons_work_without_javascript(self):
+        j = Job.objects.create(source="t", external_id="nojs", url="https://x.test/nojs", title="Django Dev", company="Acme",
+                               passed_filter=True, score=80, scored_at=timezone.now(), open_to_nigeria="yes")
+        r = self.client.get("/swipe/")
+        self.assertContains(r, f'action="/swipe/{j.pk}/"')
+        r = self.client.post(f"/swipe/{j.pk}/", {"decision": "skip"})       # plain form post, no JS header
+        self.assertRedirects(r, "/swipe/")
+        j.refresh_from_db()
+        self.assertEqual(j.status, Job.Status.SKIPPED)
+
+    def test_scripts_and_styles_are_versioned(self):
+        r = self.client.get("/swipe/")
+        self.assertRegex(r.content.decode(), r"scout/js/app\.js\?v=\d+")
+        self.assertRegex(r.content.decode(), r"scout/js/swipe\.js\?v=\d+")
+        self.assertRegex(r.content.decode(), r"scout/css/app\.css\?v=\d+")

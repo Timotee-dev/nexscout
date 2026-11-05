@@ -503,7 +503,13 @@ def swipe_decide(request, pk):
             process_in_background()
         log("status", f"Swiped right on {job.title} @ {job.company}: {kind}", job=job)
     else:
+        if request.headers.get("x-requested-with") != "fetch":
+            messages.error(request, "Unknown choice.")
+            return redirect("scout:swipe")
         return JsonResponse({"ok": False, "message": "Unknown decision."}, status=400)
+    if request.headers.get("x-requested-with") != "fetch":   # plain form post (no JavaScript)
+        messages.success(request, message)
+        return redirect("scout:swipe")
     return JsonResponse({"ok": True, "kind": kind, "message": message, "queue": _queue_counts()})
 
 

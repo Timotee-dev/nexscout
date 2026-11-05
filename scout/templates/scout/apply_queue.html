@@ -23,14 +23,17 @@
     {% for j in jobs %}
     <div class="li">
       <span class="ring sm {{ j.score|score_band }}" style="--v: {{ j.score|default:0 }}"><b>{{ j.score|default:"–" }}</b></span>
-      <a class="li-main" href="{{ j.get_absolute_url }}"><b>{{ j.title }}</b><span>{{ j.company }} · {% if j.apply_email %}email to {{ j.apply_email }}{% else %}{{ j.ats|default:"company"|capfirst }} form{% endif %}{% if j.autofilled_at %} · filled {{ j.autofilled_at|ago }} ago{% endif %}</span></a>
+      <a class="li-main" href="{{ j.get_absolute_url }}"><b>{{ j.title }}</b><span>{{ j.company }} · {% if j.apply_email %}email to {{ j.apply_email }}{% else %}{{ j.ats|default:"company"|capfirst }} form{% endif %}{% if j.autofilled_at %} · filled {{ j.autofilled_at|ago }} ago{% endif %}</span>{% if j.apply_error %}<span class="hot" style="white-space:normal">{{ j.apply_error }}</span>{% endif %}</a>
       <span class="li-side">
         {% if j.cv_file %}<a class="btn sm ghost" href="{% url 'scout:job_cv' j.pk %}" target="_blank">CV</a>{% endif %}
         {% if state == 'form' or state == 'filled' %}
           <form method="post" action="{% url 'scout:autofill_start' %}" class="inline">{% csrf_token %}<input type="hidden" name="job" value="{{ j.pk }}"><button class="btn sm" {% if not autofill_ok %}disabled{% endif %}>{% if state == 'filled' %}Fill again{% else %}Autofill{% endif %}</button></form>
           <form method="post" action="{% url 'scout:apply_queue_action' j.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="action" value="applied"><button class="btn sm">I submitted it</button></form>
         {% elif state == 'review' %}
-          <a class="btn sm primary" href="{{ j.get_absolute_url }}#apply">Review &amp; send</a>
+          <a class="btn sm primary" href="{{ j.get_absolute_url }}#apply">Open</a>
+          {% if j.apply_error %}<form method="post" action="{% url 'scout:apply_queue_action' j.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="action" value="retry"><button class="btn sm">Try again</button></form>{% endif %}
+        {% elif state == 'queued' %}
+          <span class="muted small">Writing cover note…</span>
         {% endif %}
         <form method="post" action="{% url 'scout:apply_queue_action' j.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="action" value="remove"><button class="btn sm ghost" title="Remove from queue">✕</button></form>
       </span>

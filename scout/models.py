@@ -323,6 +323,7 @@ class Job(models.Model):
     cv_project_order = models.JSONField(default=list, blank=True)
     cv_file = models.CharField(max_length=500, blank=True)
     cv_built_at = models.DateTimeField(null=True, blank=True)
+    apply_error = models.CharField(max_length=300, blank=True, help_text="Why the last apply attempt didn't finish.")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -107,6 +107,22 @@
         {% elif job.apply_email %}<span class="tag accent">Applies by email</span>
         {% else %}<span class="muted">Applies on the company's site</span>{% endif %}</div>
       <div class="panel-body">
+      {% if job.apply_queue == 'queued' %}
+        <div class="callout small" id="apply-working" data-queued="1">{% icon "refresh" %}<div class="grow">
+          {% if job.apply_error %}<b>Waiting to retry.</b> {{ job.apply_error }}
+          {% elif queued_minutes >= 5 %}<b>This is taking longer than usual.</b> NexScout is still working on it, or autopilot will pick it up on its next cycle.
+          {% else %}<b>Writing your cover note and tailored CV now.</b> This usually takes under a minute; this page updates by itself.{% endif %}</div>
+          <form method="post" action="{% url 'scout:apply_queue_action' job.pk %}" class="inline">{% csrf_token %}
+            <input type="hidden" name="action" value="queue"><input type="hidden" name="next" value="{{ request.path }}#apply">
+            <button class="btn sm">Try again now</button></form>
+        </div>
+      {% elif job.apply_error %}
+        <div class="callout warn small">{% icon "alert" %}<div class="grow"><b>Didn't finish applying.</b> {{ job.apply_error }}</div>
+          <form method="post" action="{% url 'scout:apply_queue_action' job.pk %}" class="inline">{% csrf_token %}
+            <input type="hidden" name="action" value="retry"><input type="hidden" name="next" value="{{ request.path }}#apply">
+            <button class="btn sm">Try again</button></form>
+        </div>
+      {% endif %}
       {% if job.cover_note or job.cv_file %}<p class="muted small" style="margin:0 0 12px">Tailored CV: <a class="link" href="{% url 'scout:job_cv' job.pk %}" target="_blank">{% if job.cv_file %}download PDF{% else %}build & download{% endif %}</a>{% if job.cv_file %} · <a class="link" href="{% url 'scout:job_cv' job.pk %}?rebuild=1" target="_blank">rebuild</a>{% endif %}</p>{% endif %}
       {% if job.email_sent_at %}
         <p style="margin:0 0 12px">Your application went to <b>{{ job.apply_email }}</b> on {{ job.email_sent_at|date:"D j M Y, H:i" }}{% if job.email_sent_by == 'autopilot' %}, sent by autopilot{% endif %}, with your CV attached. It's also in your Gmail Sent folder.</p>
@@ -151,7 +167,9 @@
       {% else %}
         <p style="margin:0 0 12px">This job takes applications through the company's own form{% if job.ats %} ({{ job.ats|capfirst }}){% endif %}. NexScout can open it in your browser, fill your details, upload your tailored CV and draft answers, then stop so you can check everything and click <b>Submit</b> yourself.</p>
         <div class="row-actions" style="margin-bottom:14px">
-          {% if job.apply_queue == 'form' or job.apply_queue == 'filled' %}
+          {% if job.apply_queue == 'queued' %}
+            <span class="btn" disabled>Preparing…</span>
+          {% elif job.apply_queue == 'form' or job.apply_queue == 'filled' %}
             <a class="btn primary" href="{% url 'scout:apply_queue' %}">In your autofill queue</a>
           {% else %}
             <form method="post" action="{% url 'scout:apply_queue_action' job.pk %}" class="inline" data-busy="Preparing your application…">{% csrf_token %}

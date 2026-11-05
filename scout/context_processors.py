@@ -19,7 +19,7 @@ def nav(request):
         "nav_section": match.url_name,
         "nav_deck": Job.objects.filter(status=Job.Status.NEW, passed_filter=True, scored_at__isnull=False,
                                        score__gte=s.min_score or 0).exclude(open_to_nigeria="no").count(),
-        "nav_queue": Job.objects.filter(apply_queue__in=["form", "filled", "review"]).count(),
+        "nav_queue": Job.objects.filter(apply_queue__in=["queued", "form", "filled", "review"]).count(),
         "autopilot_on": bool(s.autopilot_last_beat
                              and (timezone.now() - s.autopilot_last_beat).total_seconds() < 180),
         "autopilot_paused": not s.autopilot_enabled,

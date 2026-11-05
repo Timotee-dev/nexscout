@@ -171,3 +171,62 @@ class SwipeFallbackAndAssetsTests(TestCase):
         self.assertRegex(r.content.decode(), r"scout/js/app\.js\?v=\d+")
         self.assertRegex(r.content.decode(), r"scout/js/swipe\.js\?v=\d+")
         self.assertRegex(r.content.decode(), r"scout/css/app\.css\?v=\d+")
+
+
+class ApplyQueueFailureTests(TestCase):
+    def job(self, **kw):
+        base = dict(source="t", external_id="f1", url="https://x.test/f1", title="Django Dev", company="Acme",
+                    passed_filter=True, score=70, scored_at=timezone.now(), open_to_nigeria="yes")
+        base.update(kw)
+        return Job.objects.create(**base)
+
+    def test_unreachable_claude_is_shown_not_silent(self):
+        from scout.services import applier
+        from scout.services.claude_client import ClaudeNotFound
+        j = self.job()
+        applier.apply_now(j)
+        with mock.patch("scout.services.drafting.ask_claude", side_effect=ClaudeNotFound("Claude Code CLI 'x' not found on PATH")):
+            applier.process_queued()
+        j.refresh_from_db()
+        self.assertEqual(j.apply_queue, Job.ApplyQueue.REVIEW)
+        self.assertIn("Claude Code wasn't found", j.apply_error)
+        r = self.client.get(f"/jobs/{j.pk}/")
+        self.assertContains(r, "Didn't finish applying")
+        self.assertContains(r, "Try again")
+
+    def test_unexpected_error_is_shown_not_silent(self):
+        from scout.services import applier
+        j = self.job()
+        applier.apply_now(j)
+        with mock.patch("scout.services.drafting.ask_claude", side_effect=RuntimeError("database is locked")):
+            applier.process_queued()
+        j.refresh_from_db()
+        self.assertEqual(j.apply_queue, Job.ApplyQueue.REVIEW)
+        self.assertIn("database was busy", j.apply_error)
+
+    def test_usage_limit_keeps_it_queued_for_autopilot(self):
+        from scout.services import applier
+        from scout.services.claude_client import ClaudeLimitError
+        j = self.job()
+        applier.apply_now(j)
+        with mock.patch("scout.services.drafting.ask_claude", side_effect=ClaudeLimitError("usage limit")):
+            applier.process_queued()
+        j.refresh_from_db()
+        self.assertEqual(j.apply_queue, Job.ApplyQueue.QUEUED)
+        self.assertIn("usage limit", j.apply_error)
+        self.assertContains(self.client.get(f"/jobs/{j.pk}/"), "Waiting to retry")
+
+    def test_retry_button_requeues_and_clears_error(self):
+        from scout.services import applier
+        j = self.job(apply_queue=Job.ApplyQueue.REVIEW, apply_error="Couldn't write the cover note: boom")
+        with mock.patch.object(applier, "process_in_background") as bg:
+            self.client.post(f"/apply/{j.pk}/", {"action": "retry"})
+        j.refresh_from_db()
+        self.assertEqual((j.apply_queue, j.apply_error), (Job.ApplyQueue.QUEUED, ""))
+        bg.assert_called_once()
+
+    def test_queued_job_page_shows_working_note(self):
+        j = self.job(apply_queue=Job.ApplyQueue.QUEUED, queued_at=timezone.now())
+        r = self.client.get(f"/jobs/{j.pk}/")
+        self.assertContains(r, "Writing your cover note and tailored CV now")
+        self.assertNotContains(r, "Add to autofill queue")

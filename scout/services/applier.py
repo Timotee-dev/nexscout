@@ -12,19 +12,20 @@ from django.utils import timezone
 from scout.models import Job, Profile, ScoutSettings
 
 from .activity import log
-from .claude_client import ClaudeError
+from .claude_client import ClaudeError, ClaudeLimitError
 from .llm_json import LLMParseError
 
 DONE = (Job.Status.APPLIED, Job.Status.INTERVIEWING, Job.Status.OFFER, Job.Status.REJECTED, Job.Status.GHOSTED)
 
 
-def _queue(job, state):
+def _queue(job, state, error=""):
     job.apply_queue = state
+    job.apply_error = error[:300]
     job.queued_at = job.queued_at or timezone.now()
     if job.status in (Job.Status.NEW, Job.Status.SKIPPED):
         job.status = Job.Status.SHORTLISTED
         job.status_changed_at = timezone.now()
-    job.save(update_fields=["apply_queue", "queued_at", "status", "status_changed_at", "updated_at"])
+    job.save(update_fields=["apply_queue", "apply_error", "queued_at", "status", "status_changed_at", "updated_at"])
 
 
 def route(job, by="you"):
@@ -39,18 +40,18 @@ def route(job, by="you"):
             log("error", f"Tailored CV failed for {job.title}: {exc}", job=job)
     if job.apply_email:
         if job.draft_warnings:
-            _queue(job, Job.ApplyQueue.REVIEW)
+            _queue(job, Job.ApplyQueue.REVIEW, "The draft has something to check: " + "; ".join(job.draft_warnings))
             return "review", "The draft has something to check first. It's waiting in Needs review."
         if not (s.send_enabled and mailer.email_ready()):
-            _queue(job, Job.ApplyQueue.REVIEW)
+            _queue(job, Job.ApplyQueue.REVIEW, "Gmail isn't set up yet. Copy the email below and send it yourself, or add Gmail to .env.")
             return "review", "Gmail isn't set up yet, so it's waiting in Needs review. Open it to copy the email."
         try:
             mailer.send_application(job, by=by)
         except mailer.SendBlocked as exc:
-            _queue(job, Job.ApplyQueue.REVIEW)
+            _queue(job, Job.ApplyQueue.REVIEW, f"Not sent: {exc}")
             return "review", f"Not sent: {exc} It's waiting in Needs review."
-        job.apply_queue = ""
-        job.save(update_fields=["apply_queue", "updated_at"])
+        job.apply_queue, job.apply_error = "", ""
+        job.save(update_fields=["apply_queue", "apply_error", "updated_at"])
         return "sent", f"Sent to {job.apply_email} with your CV."
     _queue(job, Job.ApplyQueue.FORM)
     return "form", "Added to your autofill queue. Open Autofill to fill the form, then click Submit yourself."
@@ -78,15 +79,46 @@ def process_queued(limit=None):
         batch = jobs[i:i + max(1, s.draft_batch_size)]
         try:
             done = _draft_batch(batch, profile, s)
-        except (ClaudeError, LLMParseError) as exc:
-            log("error", f"Couldn't draft queued applications: {exc}")
+        except ClaudeLimitError as exc:
+            # Pro usage limit: keep them queued; autopilot retries on a later cycle.
+            for job in batch:
+                job.apply_error = "Claude's usage limit was reached. NexScout will try again automatically later."
+                job.save(update_fields=["apply_error", "updated_at"])
+            log("error", f"Claude usage limit while drafting queued applications: {exc}")
+            stats["failed"] += len(batch)
+            break
+        except Exception as exc:  # anything else: never leave a job silently stuck
+            reason = _plain_reason(exc)
+            for job in batch:
+                _queue(job, Job.ApplyQueue.REVIEW, f"Couldn't write the cover note: {reason}")
+                log("error", f"Couldn't draft application for {job.title} @ {job.company}: {reason}", job=job)
             stats["failed"] += len(batch)
             continue
+        done_ids = {j.pk for j in done}
+        for job in batch:
+            if job.pk not in done_ids:
+                _queue(job, Job.ApplyQueue.REVIEW, "Claude didn't return a draft for this job. Press Try again.")
+                log("error", f"No draft returned for {job.title} @ {job.company}", job=job)
+                stats["failed"] += 1
         for job in done:
             stats["drafted"] += 1
-            kind, _ = route(job, by="you")
+            try:
+                kind, _ = route(job, by="you")
+            except Exception as exc:
+                _queue(job, Job.ApplyQueue.REVIEW, f"Drafted, but couldn't finish: {_plain_reason(exc)}")
+                log("error", f"Couldn't finish applying to {job.title}: {exc}", job=job)
+                kind = "review"
             stats[kind] = stats.get(kind, 0) + 1
     return stats
+
+
+def _plain_reason(exc):
+    text = str(exc) or exc.__class__.__name__
+    if "locked" in text.lower():
+        return "the database was busy. Press Try again."
+    if "not found on PATH" in text or "Claude Code CLI" in text:
+        return "Claude Code wasn't found. Check CLAUDE_CLI in .env."
+    return text[:200]
 
 
 _worker_lock = threading.Lock()
@@ -103,7 +135,9 @@ def process_in_background():
                 before = Job.objects.filter(apply_queue=Job.ApplyQueue.QUEUED).count()
                 process_queued(limit=5)
                 if Job.objects.filter(apply_queue=Job.ApplyQueue.QUEUED).count() >= before:
-                    break  # drafting failed (e.g. Claude limit); autopilot will retry later
+                    break  # e.g. Claude limit: autopilot retries later
+        except Exception as exc:  # last resort: record it so the page can show it
+            log("error", f"Background apply worker stopped: {exc}")
         finally:
             close_old_connections()
             _worker_lock.release()

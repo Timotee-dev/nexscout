@@ -195,12 +195,13 @@ def job_detail(request, pk):
               for x in job.also_seen_on or []]
     if job.apply_email and not job.email_sent_at and job.cover_note:
         mailer.prepare(job)
+    queued_minutes = int((timezone.now() - job.queued_at).total_seconds() // 60) if job.queued_at else 0
     return render(request, "scout/job_detail.html", {
         "job": job, "draft_form": JobDraftForm(instance=job), "notes_form": JobNotesForm(instance=job),
         "email_form": JobEmailForm(instance=job), "email_ready": mailer.email_ready(),
         "cv_ready": bool(mailer.cv_path()), "send_enabled": s.send_enabled,
         "auto_send_problems": mailer.auto_send_problems(job, s) if job.apply_email and not job.email_sent_at else [],
-        "auto_send": s.auto_send, "followup_due": job.is_followup_due,
+        "auto_send": s.auto_send, "followup_due": job.is_followup_due, "queued_minutes": queued_minutes,
         "statuses": Job.Status.choices, "threshold": s.score_threshold, "project": project,
         "source_label": get_sources()[job.source].label if job.source in get_sources() else job.source,
         "also_seen": others, "activity": job.activity.all()[:12],
@@ -543,8 +544,11 @@ def apply_queue_action(request, pk):
         job.apply_queue = ""
         job.save(update_fields=["apply_queue", "updated_at"])
         messages.success(request, "Removed from the queue.")
-    elif action == "queue":
+    elif action in ("queue", "retry"):
         from .services.applier import apply_now, process_in_background
+        if action == "retry" or job.apply_queue == Job.ApplyQueue.QUEUED:
+            job.apply_queue, job.apply_error = "", ""
+            job.save(update_fields=["apply_queue", "apply_error", "updated_at"])
         kind, msg = apply_now(job, by="you")
         if kind == "queued":
             process_in_background()

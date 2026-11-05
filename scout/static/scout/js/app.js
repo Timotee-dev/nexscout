@@ -88,4 +88,18 @@
   // Keep search caret at end after auto-submit reloads
   const search = document.querySelector(".filters input[type=search]");
   if (search && search.value) { search.focus(); const v = search.value; search.value = ""; search.value = v; }
+
+  // Job page: while NexScout is preparing an application in the background, refresh until it's done
+  const working = document.getElementById("apply-working");
+  if (working && !working.querySelector("b")?.textContent.includes("retry")) {
+    let tries = 0;
+    const tick = () => {
+      if (++tries > 18) return;                       // stop after ~3 minutes
+      fetch(location.href, { headers: { "X-Requested-With": "poll" } })
+        .then((r) => r.text())
+        .then((html) => { if (!html.includes('id="apply-working"')) location.reload(); else setTimeout(tick, 10000); })
+        .catch(() => setTimeout(tick, 10000));
+    };
+    setTimeout(tick, 8000);
+  }
 })();
